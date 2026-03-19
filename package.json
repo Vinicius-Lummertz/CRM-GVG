@@ -1,0 +1,15 @@
+{
+  "name": "twilio-whatsapp-leads-dashboard",
+  "version": "1.0.0",
+  "description": "Demo MVP: webhook Twilio WhatsApp + dashboard de leads em tempo real com SSE.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  }
+}
