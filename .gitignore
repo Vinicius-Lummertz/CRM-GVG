@@ -140,3 +140,4 @@ vite.config.ts.timestamp-*
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+data/leads.sqlite data/leads.sqlite.legacy-backup-1773937729079 data/leads.sqlite-shm data/leads.sqlite-wal

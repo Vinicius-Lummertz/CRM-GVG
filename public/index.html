@@ -24,6 +24,38 @@
             Conectando stream...
           </div>
         </div>
+
+        <div class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <label class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Filtro status</span>
+            <select id="filter-status" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
+              <option value="">Todos</option>
+              <option value="lead">lead</option>
+              <option value="em_contato">em_contato</option>
+              <option value="interessado">interessado</option>
+              <option value="proposta_enviada">proposta_enviada</option>
+              <option value="negociando">negociando</option>
+              <option value="ganho">ganho</option>
+              <option value="perdido">perdido</option>
+              <option value="inativo">inativo</option>
+            </select>
+          </label>
+
+          <label class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Filtro temperatura</span>
+            <select id="filter-temperature" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
+              <option value="">Todas</option>
+              <option value="cold">cold</option>
+              <option value="warm">warm</option>
+              <option value="hot">hot</option>
+            </select>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <input id="filter-attention" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
+            <span class="text-sm font-medium text-slate-700">Somente com atenção necessária</span>
+          </label>
+        </div>
       </header>
 
       <section>
