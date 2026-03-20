@@ -139,7 +139,7 @@ function createMessagesRepository(db) {
   }
 
   async function listByLeadDescLimit(leadId, limit) {
-    return db.all("SELECT * FROM messages WHERE lead_id = ? ORDER BY datetime(created_at) DESC LIMIT ?", [leadId, limit]);
+    return db.all("SELECT * FROM messages WHERE lead_id = ? ORDER BY created_at DESC LIMIT ?", [leadId, limit]);
   }
 
   async function listByLeadDescCursor(leadId, limit, cursorCreatedAt, cursorId) {
@@ -153,10 +153,10 @@ function createMessagesRepository(db) {
         FROM messages
         WHERE lead_id = ?
           AND (
-            datetime(created_at) < datetime(?)
-            OR (datetime(created_at) = datetime(?) AND id < ?)
+            created_at < ?
+            OR (created_at = ? AND id < ?)
           )
-        ORDER BY datetime(created_at) DESC, id DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ?
       `,
       [leadId, cursorCreatedAt, cursorCreatedAt, cursorId, limit]
@@ -165,20 +165,20 @@ function createMessagesRepository(db) {
 
   async function listByLeadAfterTimestamp(leadId, createdAt) {
     return db.all(
-      "SELECT id, direction, preview, created_at FROM messages WHERE lead_id = ? AND datetime(created_at) > datetime(?) ORDER BY datetime(created_at) ASC",
+      "SELECT id, direction, preview, created_at FROM messages WHERE lead_id = ? AND created_at > ? ORDER BY created_at ASC",
       [leadId, createdAt]
     );
   }
 
   async function listRecentForAnalysis(leadId, limit) {
     return db.all(
-      "SELECT id, direction, preview, created_at FROM messages WHERE lead_id = ? ORDER BY datetime(created_at) DESC LIMIT ?",
+      "SELECT id, direction, preview, created_at FROM messages WHERE lead_id = ? ORDER BY created_at DESC LIMIT ?",
       [leadId, limit]
     );
   }
 
   async function findLatestByLead(leadId) {
-    return db.get("SELECT * FROM messages WHERE lead_id = ? ORDER BY datetime(created_at) DESC LIMIT 1", [leadId]);
+    return db.get("SELECT * FROM messages WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1", [leadId]);
   }
 
   return {

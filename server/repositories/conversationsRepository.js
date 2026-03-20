@@ -97,7 +97,7 @@ function createConversationsRepository(db) {
       params.push(pattern, pattern, pattern);
     }
     if (input.cursorUpdatedAt && input.cursorLeadId) {
-      where.push("(datetime(l.updated_at) < datetime(?) OR (datetime(l.updated_at) = datetime(?) AND l.id < ?))");
+      where.push("(l.updated_at < ? OR (l.updated_at = ? AND l.id < ?))");
       params.push(input.cursorUpdatedAt, input.cursorUpdatedAt, input.cursorLeadId);
     }
 
@@ -108,7 +108,7 @@ function createConversationsRepository(db) {
       `
         ${DETAIL_SELECT}
         WHERE ${where.join(" AND ")}
-        ORDER BY datetime(l.updated_at) DESC, l.id DESC
+        ORDER BY l.updated_at DESC, l.id DESC
         LIMIT ?
       `,
       params

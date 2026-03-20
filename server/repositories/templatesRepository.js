@@ -60,7 +60,7 @@ function createTemplatesRepository(db) {
       params.push(pattern, pattern);
     }
     if (input.cursorUpdatedAt && input.cursorTemplateId) {
-      where.push("(datetime(updated_at) < datetime(?) OR (datetime(updated_at) = datetime(?) AND id < ?))");
+      where.push("(updated_at < ? OR (updated_at = ? AND id < ?))");
       params.push(input.cursorUpdatedAt, input.cursorUpdatedAt, input.cursorTemplateId);
     }
 
@@ -72,7 +72,7 @@ function createTemplatesRepository(db) {
         SELECT *
         FROM templates
         WHERE ${where.join(" AND ")}
-        ORDER BY datetime(updated_at) DESC, id DESC
+        ORDER BY updated_at DESC, id DESC
         LIMIT ?
       `,
       params

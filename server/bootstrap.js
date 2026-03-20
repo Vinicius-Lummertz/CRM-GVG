@@ -11,7 +11,7 @@ const { createCrmService } = require("./use-cases/crm/createCrmService");
 const { createV1Service } = require("./use-cases/v1/createV1Service");
 
 async function startServer(config) {
-  const db = await initDb(config.db.filePath);
+  const db = await initDb(config.db.connectionString);
   const sseHub = createSseHub();
   const twilioMediaProxy = createTwilioMediaProxy({
     accountSid: config.twilio.accountSid,
@@ -57,7 +57,7 @@ async function startServer(config) {
   });
 
   app.listen(config.app.port, () => {
-    console.log(`[db] SQLite inicializado em ${config.db.filePath}`);
+    console.log("[db] Postgres/Supabase inicializado");
     console.log(`Servidor ativo em http://localhost:${config.app.port}`);
     if (twilioMediaProxy.hasCredentials) console.log("[env] Secrets da env lidos corretamente");
     if (whatsappProvider.hasCredentials) console.log("[env] WhatsApp outbound provider configurado");

@@ -9,7 +9,7 @@ function createMessageDeliveryRepository(db) {
   }
 
   async function listByMessageId(messageId) {
-    return db.all("SELECT * FROM message_delivery WHERE message_id = ? ORDER BY datetime(created_at) ASC", [messageId]);
+    return db.all("SELECT * FROM message_delivery WHERE message_id = ? ORDER BY created_at ASC", [messageId]);
   }
 
   return {

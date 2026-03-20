@@ -67,7 +67,7 @@ function createAuthRepository(db) {
   }
 
   async function listOperators() {
-    return db.all("SELECT * FROM operators ORDER BY datetime(updated_at) DESC");
+    return db.all("SELECT * FROM operators ORDER BY updated_at DESC");
   }
 
   async function createSession(input) {

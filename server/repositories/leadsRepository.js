@@ -151,7 +151,7 @@ function createLeadsRepository(db) {
     }
 
     return db.all(
-      `SELECT * FROM leads WHERE ${where.join(" AND ")} ORDER BY priority_score DESC, datetime(last_message_at) DESC`,
+      `SELECT * FROM leads WHERE ${where.join(" AND ")} ORDER BY priority_score DESC, last_message_at DESC`,
       params
     );
   }
@@ -165,11 +165,11 @@ function createLeadsRepository(db) {
       params.push(input.ownerId);
     }
     if (input.from) {
-      where.push("datetime(updated_at) >= datetime(?)");
+      where.push("updated_at >= ?");
       params.push(input.from);
     }
     if (input.to) {
-      where.push("datetime(updated_at) <= datetime(?)");
+      where.push("updated_at <= ?");
       params.push(input.to);
     }
 
