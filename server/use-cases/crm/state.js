@@ -17,6 +17,7 @@ function createEnsureConversationState({ repositories, generateId, nowIso }) {
       aiShortSummary: lead?.ai_summary || null,
       aiLastReason: lead?.ai_last_reason || null,
       aiLastConfidence: lead?.ai_last_confidence || 0,
+      budgetText: "Nao informado.",
       messagesAfterLastResume: lead?.messages_after_last_resume || 0,
       attentionRequired: 0,
       sentiment: "neutral",

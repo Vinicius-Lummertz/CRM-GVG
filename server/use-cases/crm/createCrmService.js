@@ -40,6 +40,19 @@ function createCrmService({ db, openAiApiKey, openAiModel, emitLeadUpdated }) {
     nowIso
   });
 
+  async function ensureConversationRecord(lead, timestamp) {
+    if (!lead?.id) return null;
+    return repositories.conversations.ensureForLead({
+      id: generateId("convbox"),
+      leadId: lead.id,
+      ownerId: lead.owner_id || null,
+      ownerName: lead.owner_name || null,
+      archived: lead.archived || 0,
+      createdAt: lead.created_at || timestamp || nowIso(),
+      updatedAt: timestamp || lead.updated_at || nowIso()
+    });
+  }
+
   const queryUseCases = createLeadQueryUseCases({
     repositories,
     ensureConversationState,
@@ -51,6 +64,7 @@ function createCrmService({ db, openAiApiKey, openAiModel, emitLeadUpdated }) {
   const inboundUseCases = createInboundWebhookUseCases({
     repositories,
     ensureConversationState,
+    ensureConversationRecord,
     generateId,
     nowIso,
     extractLeadIdentity,

@@ -3,6 +3,7 @@
 function createInboundWebhookUseCases({
   repositories,
   ensureConversationState,
+  ensureConversationRecord,
   generateId,
   nowIso,
   extractLeadIdentity,
@@ -44,6 +45,7 @@ function createInboundWebhookUseCases({
       });
       lead = await repositories.leads.findById(leadId);
       await ensureConversationState(leadId, lead);
+      await ensureConversationRecord(lead, timestamp);
       return lead;
     }
 
@@ -58,6 +60,7 @@ function createInboundWebhookUseCases({
 
     lead = await repositories.leads.findById(lead.id);
     await ensureConversationState(lead.id, lead);
+    await ensureConversationRecord(lead, timestamp);
     return lead;
   }
 

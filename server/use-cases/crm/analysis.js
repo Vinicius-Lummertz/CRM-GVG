@@ -65,6 +65,7 @@ function createLeadAnalysisUseCases({
       aiShortSummary: params.classification.short_summary,
       aiLastReason: params.classification.reason,
       aiLastConfidence: confidence,
+      budgetText: params.classification.budget_text,
       lastAnalyzedMessageId: lastAnalyzedMessageId || null,
       lastAnalysisAt: timestamp,
       lastTriggerReason: params.triggerReason,

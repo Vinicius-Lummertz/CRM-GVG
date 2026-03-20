@@ -32,13 +32,18 @@ function parsePort(rawPort) {
 function loadConfig({ rootDir }) {
   loadEnvFromFile(rootDir);
 
-  const aiApiKey = process.env.GEMINI_API_KEY || process.env.ONPENAI_API_KEY || "";
+  const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ONPENAI_API_KEY || "";
   const aiModel = String(process.env.GEMINI_MODEL || process.env.OPENAI_MODEL || "gemini-3.1-flash-lite-preview").trim();
   const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID || "";
   const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN || "";
+  const twilioWhatsappFrom = process.env.TWILIO_WHATSAPP_FROM || "";
+  const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || "").trim();
 
   const config = {
     rootDir,
+    workspace: {
+      id: "default"
+    },
     app: {
       port: parsePort(process.env.PORT),
       publicDir: path.join(rootDir, "public")
@@ -47,22 +52,32 @@ function loadConfig({ rootDir }) {
       filePath: path.join(rootDir, "data", "leads.sqlite")
     },
     ai: {
-      aiApiKey,
+      apiKey,
       model: aiModel,
       hasLegacyTypoKey: Boolean(process.env.ONPENAI_API_KEY && !process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY)
+    },
+    auth: {
+      otpTtlMinutes: Number.parseInt(String(process.env.OTP_TTL_MINUTES || "5"), 10) || 5,
+      otpMaxAttempts: Number.parseInt(String(process.env.OTP_MAX_ATTEMPTS || "5"), 10) || 5,
+      accessTtlMinutes: Number.parseInt(String(process.env.AUTH_ACCESS_TTL_MINUTES || "30"), 10) || 30,
+      refreshTtlMinutes: Number.parseInt(String(process.env.AUTH_REFRESH_TTL_MINUTES || "10080"), 10) || 10080
     },
     twilio: {
       accountSid: twilioAccountSid,
       authToken: twilioAuthToken,
+      whatsappFrom: twilioWhatsappFrom,
+      statusCallbackUrl: publicBaseUrl ? `${publicBaseUrl.replace(/\/$/, "")}/api/v1/providers/whatsapp/webhooks/status` : "",
       mediaHosts: ["api.twilio.com", "mms.twiliocdn.com"]
     }
   };
 
   return Object.freeze({
     ...config,
+    workspace: Object.freeze(config.workspace),
     app: Object.freeze(config.app),
     db: Object.freeze(config.db),
     ai: Object.freeze(config.ai),
+    auth: Object.freeze(config.auth),
     twilio: Object.freeze(config.twilio)
   });
 }

@@ -10,8 +10,8 @@ function createConversationStateRepository(db) {
       `
         INSERT INTO conversation_state (
           id, lead_id, current_status, current_stage_label, ai_summary, ai_short_summary, ai_last_reason, ai_last_confidence,
-          messages_after_last_resume, attention_required, sentiment, interest_level, risk_level, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          budget_text, messages_after_last_resume, attention_required, sentiment, interest_level, risk_level, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         input.id,
@@ -22,6 +22,7 @@ function createConversationStateRepository(db) {
         input.aiShortSummary,
         input.aiLastReason,
         input.aiLastConfidence,
+        input.budgetText || "Nao informado.",
         input.messagesAfterLastResume,
         input.attentionRequired,
         input.sentiment,
@@ -40,12 +41,19 @@ function createConversationStateRepository(db) {
     );
   }
 
+  async function updateCurrentStatus(input) {
+    await db.run(
+      "UPDATE conversation_state SET current_status = ?, current_stage_label = ?, updated_at = ? WHERE lead_id = ?",
+      [input.currentStatus, input.currentStatus, input.updatedAt, input.leadId]
+    );
+  }
+
   async function updateAfterAnalysis(input) {
     await db.run(
       `
         UPDATE conversation_state
         SET current_status = ?, current_stage_label = ?, ai_summary = ?, ai_short_summary = ?, ai_last_reason = ?, ai_last_confidence = ?,
-            messages_after_last_resume = 0, last_analyzed_message_id = ?, last_analysis_at = ?, last_trigger_reason = ?, attention_required = ?,
+            budget_text = ?, messages_after_last_resume = 0, last_analyzed_message_id = ?, last_analysis_at = ?, last_trigger_reason = ?, attention_required = ?,
             sentiment = ?, interest_level = ?, risk_level = ?, next_action = ?, updated_at = ?
         WHERE lead_id = ?
       `,
@@ -56,6 +64,7 @@ function createConversationStateRepository(db) {
         input.aiShortSummary,
         input.aiLastReason,
         input.aiLastConfidence,
+        input.budgetText || "Nao informado.",
         input.lastAnalyzedMessageId,
         input.lastAnalysisAt,
         input.lastTriggerReason,
@@ -74,6 +83,7 @@ function createConversationStateRepository(db) {
     findByLeadId,
     insertState,
     updateAfterInbound,
+    updateCurrentStatus,
     updateAfterAnalysis
   };
 }

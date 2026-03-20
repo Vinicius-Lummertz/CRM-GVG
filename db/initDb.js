@@ -28,6 +28,7 @@ async function createTables(db) {
       pipeline_position INTEGER DEFAULT 0,
       priority_score REAL DEFAULT 0,
       temperature TEXT DEFAULT 'cold',
+      owner_id TEXT,
       owner_name TEXT,
       ai_summary TEXT,
       ai_last_reason TEXT,
@@ -55,6 +56,7 @@ async function createTables(db) {
       id TEXT PRIMARY KEY,
       lead_id TEXT NOT NULL,
       message_sid TEXT,
+      provider_message_id TEXT,
       direction TEXT NOT NULL,
       body TEXT,
       preview TEXT NOT NULL,
@@ -65,6 +67,17 @@ async function createTables(db) {
       raw_payload_json TEXT,
       ai_relevant INTEGER DEFAULT 1,
       sent_by_customer INTEGER DEFAULT 1,
+      delivery_status TEXT DEFAULT 'received',
+      mode TEXT DEFAULT 'real',
+      idempotency_key TEXT,
+      template_id TEXT,
+      queued_at TEXT,
+      sending_at TEXT,
+      sent_at TEXT,
+      delivered_at TEXT,
+      read_at TEXT,
+      failed_at TEXT,
+      failed_reason TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (lead_id) REFERENCES leads(id)
     );
@@ -85,6 +98,17 @@ async function createTables(db) {
   `);
 
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS message_delivery (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      delivery_status TEXT NOT NULL,
+      provider_payload_json TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (message_id) REFERENCES messages(id)
+    );
+  `);
+
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS conversation_state (
       id TEXT PRIMARY KEY,
       lead_id TEXT UNIQUE NOT NULL,
@@ -94,6 +118,7 @@ async function createTables(db) {
       ai_short_summary TEXT,
       ai_last_reason TEXT,
       ai_last_confidence REAL DEFAULT 0,
+      budget_text TEXT,
       messages_after_last_resume INTEGER DEFAULT 0,
       last_analyzed_message_id TEXT,
       last_analysis_at TEXT,
@@ -104,6 +129,19 @@ async function createTables(db) {
       risk_level TEXT DEFAULT 'low',
       next_action TEXT,
       next_action_due_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (lead_id) REFERENCES leads(id)
+    );
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT UNIQUE NOT NULL,
+      owner_id TEXT,
+      owner_name TEXT,
+      archived INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (lead_id) REFERENCES leads(id)
@@ -145,6 +183,65 @@ async function createTables(db) {
       FOREIGN KEY (lead_id) REFERENCES leads(id)
     );
   `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS operators (
+      id TEXT PRIMARY KEY,
+      phone TEXT UNIQUE NOT NULL,
+      name TEXT,
+      role TEXT DEFAULT 'operator',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      body TEXT NOT NULL,
+      language TEXT DEFAULT 'pt_BR',
+      category TEXT DEFAULT 'utility',
+      variables_json TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_by_operator_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (created_by_operator_id) REFERENCES operators(id)
+    );
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS otp_challenges (
+      id TEXT PRIMARY KEY,
+      phone TEXT NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'whatsapp',
+      code_hash TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER DEFAULT 0,
+      max_attempts INTEGER DEFAULT 5,
+      expires_at TEXT NOT NULL,
+      provider_message_id TEXT,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      operator_id TEXT NOT NULL,
+      access_token_hash TEXT UNIQUE NOT NULL,
+      refresh_token_hash TEXT UNIQUE NOT NULL,
+      access_expires_at TEXT NOT NULL,
+      refresh_expires_at TEXT NOT NULL,
+      revoked_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (operator_id) REFERENCES operators(id)
+    );
+  `);
 }
 
 async function ensureLegacyCompatibility(db) {
@@ -156,6 +253,8 @@ async function ensureLegacyCompatibility(db) {
   await ensureColumn(db, "leads", "pipeline_position", "INTEGER DEFAULT 0");
   await ensureColumn(db, "leads", "priority_score", "REAL DEFAULT 0");
   await ensureColumn(db, "leads", "temperature", "TEXT DEFAULT 'cold'");
+  await ensureColumn(db, "leads", "owner_id", "TEXT");
+  await ensureColumn(db, "leads", "owner_name", "TEXT");
   await ensureColumn(db, "leads", "ai_summary", "TEXT");
   await ensureColumn(db, "leads", "ai_last_reason", "TEXT");
   await ensureColumn(db, "leads", "ai_last_confidence", "REAL DEFAULT 0");
@@ -183,6 +282,22 @@ async function ensureLegacyCompatibility(db) {
   await ensureColumn(db, "messages", "raw_payload_json", "TEXT");
   await ensureColumn(db, "messages", "created_at", "TEXT");
   await ensureColumn(db, "messages", "sent_by_customer", "INTEGER DEFAULT 1");
+  await ensureColumn(db, "messages", "provider_message_id", "TEXT");
+  await ensureColumn(db, "messages", "delivery_status", "TEXT DEFAULT 'received'");
+  await ensureColumn(db, "messages", "mode", "TEXT DEFAULT 'real'");
+  await ensureColumn(db, "messages", "idempotency_key", "TEXT");
+  await ensureColumn(db, "messages", "template_id", "TEXT");
+  await ensureColumn(db, "messages", "queued_at", "TEXT");
+  await ensureColumn(db, "messages", "sending_at", "TEXT");
+  await ensureColumn(db, "messages", "sent_at", "TEXT");
+  await ensureColumn(db, "messages", "delivered_at", "TEXT");
+  await ensureColumn(db, "messages", "read_at", "TEXT");
+  await ensureColumn(db, "messages", "failed_at", "TEXT");
+  await ensureColumn(db, "messages", "failed_reason", "TEXT");
+
+  await ensureColumn(db, "conversation_state", "budget_text", "TEXT");
+
+  const now = new Date().toISOString();
 
   await db.run("UPDATE leads SET external_key = COALESCE(NULLIF(external_key, ''), id);");
   await db.run("UPDATE leads SET id = COALESCE(NULLIF(id, ''), external_key);");
@@ -191,10 +306,39 @@ async function ensureLegacyCompatibility(db) {
   await db.run("UPDATE leads SET status = COALESCE(NULLIF(status, ''), 'lead');");
   await db.run("UPDATE leads SET temperature = COALESCE(NULLIF(temperature, ''), 'cold');");
   await db.run("UPDATE leads SET last_message_preview = COALESCE(NULLIF(last_message_preview, ''), last_message, 'Sem mensagem');").catch(() => {});
-  await db.run("UPDATE leads SET created_at = COALESCE(created_at, ?);", [new Date().toISOString()]);
-  await db.run("UPDATE leads SET updated_at = COALESCE(updated_at, created_at, ?);", [new Date().toISOString()]);
+  await db.run("UPDATE leads SET created_at = COALESCE(created_at, ?);", [now]);
+  await db.run("UPDATE leads SET updated_at = COALESCE(updated_at, created_at, ?);", [now]);
   await db.run("UPDATE leads SET last_message = COALESCE(NULLIF(last_message, ''), last_message_preview, 'Sem mensagem');").catch(() => {});
-  await db.run("UPDATE messages SET created_at = COALESCE(created_at, timestamp, ?);", [new Date().toISOString()]).catch(() => {});
+
+  await db.run("UPDATE messages SET created_at = COALESCE(created_at, timestamp, ?);", [now]).catch(() => {});
+  await db.run("UPDATE messages SET mode = COALESCE(NULLIF(mode, ''), 'real');");
+  await db.run("UPDATE messages SET delivery_status = COALESCE(NULLIF(delivery_status, ''), CASE WHEN direction = 'outbound' THEN 'queued' ELSE 'received' END);");
+  await db.run("UPDATE messages SET queued_at = COALESCE(queued_at, created_at) WHERE direction = 'outbound' AND queued_at IS NULL;");
+  await db.run("UPDATE conversation_state SET budget_text = COALESCE(NULLIF(budget_text, ''), 'Nao informado.');");
+}
+
+async function backfillConversations(db) {
+  await db.run(
+    `
+      INSERT INTO conversations (id, lead_id, owner_id, owner_name, archived, created_at, updated_at)
+      SELECT lower(hex(randomblob(16))), l.id, l.owner_id, l.owner_name, COALESCE(l.archived, 0), l.created_at, l.updated_at
+      FROM leads l
+      WHERE NOT EXISTS (
+        SELECT 1 FROM conversations c WHERE c.lead_id = l.id
+      )
+    `
+  );
+
+  await db.run(
+    `
+      UPDATE conversations
+      SET owner_id = COALESCE(owner_id, (SELECT owner_id FROM leads WHERE leads.id = conversations.lead_id)),
+          owner_name = COALESCE(owner_name, (SELECT owner_name FROM leads WHERE leads.id = conversations.lead_id)),
+          archived = COALESCE(archived, (SELECT archived FROM leads WHERE leads.id = conversations.lead_id), 0),
+          updated_at = COALESCE(updated_at, created_at, ?)
+    `,
+    [new Date().toISOString()]
+  );
 }
 
 async function createIndexes(db) {
@@ -203,16 +347,40 @@ async function createIndexes(db) {
   await db.exec("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_leads_wa_id ON leads(wa_id);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_leads_owner_id ON leads(owner_id);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_leads_last_message_at ON leads(last_message_at);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_leads_updated_at ON leads(updated_at);");
 
   await db.exec("CREATE INDEX IF NOT EXISTS idx_messages_lead_id ON messages(lead_id);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_messages_message_sid ON messages(message_sid);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_messages_provider_message_id ON messages(provider_message_id);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_messages_direction ON messages(direction);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_messages_delivery_status ON messages(delivery_status);");
+  await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_idempotency_key_unique ON messages(idempotency_key) WHERE idempotency_key IS NOT NULL;");
 
   await db.exec("CREATE INDEX IF NOT EXISTS idx_message_media_message_id ON message_media(message_id);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_message_media_lead_id ON message_media(lead_id);");
+
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_message_delivery_message_id ON message_delivery(message_id);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_message_delivery_status ON message_delivery(delivery_status);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_message_delivery_created_at ON message_delivery(created_at);");
+
+  await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_lead_id ON conversations(lead_id);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_conversations_owner_id ON conversations(owner_id);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(archived);");
+
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_templates_is_active ON templates(is_active);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_templates_updated_at ON templates(updated_at);");
+
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_challenges(phone);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_otp_status ON otp_challenges(status);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_otp_expires_at ON otp_challenges(expires_at);");
+
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_operator_id ON auth_sessions(operator_id);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_access_expires ON auth_sessions(access_expires_at);");
+  await db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_refresh_expires ON auth_sessions(refresh_expires_at);");
 
   await db.exec("CREATE INDEX IF NOT EXISTS idx_lead_events_lead_id ON lead_events(lead_id);");
   await db.exec("CREATE INDEX IF NOT EXISTS idx_lead_events_event_type ON lead_events(event_type);");
@@ -281,6 +449,7 @@ async function initDb(dbFilePath) {
 
   await createTables(db);
   await ensureLegacyCompatibility(db);
+  await backfillConversations(db);
   await createIndexes(db);
 
   return db;

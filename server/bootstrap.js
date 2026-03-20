@@ -2,10 +2,13 @@
 
 const { initDb } = require("../db/initDb");
 const { createHttpApp } = require("./http/createApp");
+const { createRequireAuth } = require("./http/authMiddleware");
 const { createControllers } = require("./controllers");
 const { createSseHub } = require("./events/sseHub");
 const { createTwilioMediaProxy } = require("./integrations/twilioMediaProxy");
+const { createWhatsappProvider } = require("./integrations/whatsappProvider");
 const { createCrmService } = require("./use-cases/crm/createCrmService");
+const { createV1Service } = require("./use-cases/v1/createV1Service");
 
 async function startServer(config) {
   const db = await initDb(config.db.filePath);
@@ -14,6 +17,12 @@ async function startServer(config) {
     accountSid: config.twilio.accountSid,
     authToken: config.twilio.authToken,
     allowedHosts: config.twilio.mediaHosts
+  });
+  const whatsappProvider = createWhatsappProvider({
+    accountSid: config.twilio.accountSid,
+    authToken: config.twilio.authToken,
+    fromNumber: config.twilio.whatsappFrom,
+    statusCallbackUrl: config.twilio.statusCallbackUrl
   });
 
   let crm;
@@ -28,16 +37,29 @@ async function startServer(config) {
     }
   });
 
-  const controllers = createControllers({ crm, sseHub, twilioMediaProxy });
+  const v1Service = createV1Service({
+    db,
+    crm,
+    sseHub,
+    whatsappProvider,
+    config
+  });
+
+  const controllers = createControllers({ crm, v1Service, sseHub, twilioMediaProxy });
+  const middlewares = {
+    requireAuth: createRequireAuth(v1Service)
+  };
   const app = createHttpApp({
     publicDir: config.app.publicDir,
-    controllers
+    controllers,
+    middlewares
   });
 
   app.listen(config.app.port, () => {
     console.log(`[db] SQLite inicializado em ${config.db.filePath}`);
     console.log(`Servidor ativo em http://localhost:${config.app.port}`);
     if (twilioMediaProxy.hasCredentials) console.log("[env] Secrets da env lidos corretamente");
+    if (whatsappProvider.hasCredentials) console.log("[env] WhatsApp outbound provider configurado");
     if (config.ai.hasLegacyTypoKey) {
       console.log("[env] Aviso: ONPENAI_API_KEY encontrado, prefira GEMINI_API_KEY.");
     }

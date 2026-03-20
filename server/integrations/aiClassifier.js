@@ -28,7 +28,8 @@ const CLASSIFICATION_JSON_SCHEMA = {
       "sentiment",
       "interest_level",
       "risk_level",
-      "next_action"
+      "next_action",
+      "budget_text"
     ],
     properties: {
       should_update_status: { type: "boolean" },
@@ -43,7 +44,8 @@ const CLASSIFICATION_JSON_SCHEMA = {
       sentiment: { type: "string", enum: SENTIMENT_VALUES },
       interest_level: { type: "string", enum: INTEREST_LEVEL_VALUES },
       risk_level: { type: "string", enum: RISK_LEVEL_VALUES },
-      next_action: { type: "string", minLength: 1 }
+      next_action: { type: "string", minLength: 1 },
+      budget_text: { type: "string", minLength: 1 }
     }
   }
 };
@@ -63,7 +65,8 @@ const GEMINI_RESPONSE_SCHEMA = {
     sentiment: { type: "STRING", enum: SENTIMENT_VALUES },
     interest_level: { type: "STRING", enum: INTEREST_LEVEL_VALUES },
     risk_level: { type: "STRING", enum: RISK_LEVEL_VALUES },
-    next_action: { type: "STRING" }
+    next_action: { type: "STRING" },
+    budget_text: { type: "STRING" }
   },
   required: [
     "should_update_status",
@@ -78,7 +81,8 @@ const GEMINI_RESPONSE_SCHEMA = {
     "sentiment",
     "interest_level",
     "risk_level",
-    "next_action"
+    "next_action",
+    "budget_text"
   ]
 };
 
@@ -114,7 +118,8 @@ function normalizeClassification(raw) {
     sentiment: normalizeEnum(raw.sentiment, SENTIMENT_VALUES, "neutral"),
     interest_level: normalizeEnum(raw.interest_level, INTEREST_LEVEL_VALUES, "unknown"),
     risk_level: normalizeEnum(raw.risk_level, RISK_LEVEL_VALUES, "low"),
-    next_action: safeString(raw.next_action, "Acompanhar proximo contato.")
+    next_action: safeString(raw.next_action, "Acompanhar proximo contato."),
+    budget_text: safeString(raw.budget_text, "Nao informado.")
   };
 }
 

@@ -101,6 +101,42 @@ function createLeadsRepository(db) {
     );
   }
 
+  async function updateManualStatus(input) {
+    await db.run(
+      `
+        UPDATE leads
+        SET status = ?, pipeline_position = ?, updated_at = ?
+        WHERE id = ?
+      `,
+      [input.status, input.pipelinePosition, input.updatedAt, input.id]
+    );
+  }
+
+  async function updateOwner(input) {
+    await db.run(
+      "UPDATE leads SET owner_id = ?, owner_name = ?, updated_at = ? WHERE id = ?",
+      [input.ownerId || null, input.ownerName || null, input.updatedAt, input.id]
+    );
+  }
+
+  async function updateOutboundCounters(input) {
+    await db.run(
+      `
+        UPDATE leads
+        SET
+          last_message = ?, last_message_preview = ?, last_message_at = ?, last_outbound_at = ?,
+          message_count_total = COALESCE(message_count_total, 0) + 1, outbound_count = COALESCE(outbound_count, 0) + 1,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      [input.preview, input.preview, input.timestamp, input.timestamp, input.timestamp, input.id]
+    );
+  }
+
+  async function touchUpdatedAt(input) {
+    await db.run("UPDATE leads SET updated_at = ? WHERE id = ?", [input.updatedAt, input.id]);
+  }
+
   async function listActiveLeads(filters) {
     const where = ["archived = 0"];
     const params = [];
@@ -120,6 +156,40 @@ function createLeadsRepository(db) {
     );
   }
 
+  async function metricsSummary(input) {
+    const where = ["archived = 0"];
+    const params = [];
+
+    if (input.ownerId) {
+      where.push("owner_id = ?");
+      params.push(input.ownerId);
+    }
+    if (input.from) {
+      where.push("datetime(updated_at) >= datetime(?)");
+      params.push(input.from);
+    }
+    if (input.to) {
+      where.push("datetime(updated_at) <= datetime(?)");
+      params.push(input.to);
+    }
+
+    const baseWhere = where.join(" AND ");
+
+    const [totals, hotLeads, wonLeads, lostLeads] = await Promise.all([
+      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere}`, params),
+      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere} AND temperature = 'hot'`, params),
+      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere} AND status = 'ganho'`, params),
+      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere} AND status = 'perdido'`, params)
+    ]);
+
+    return {
+      totalLeads: totals?.total || 0,
+      hotLeads: hotLeads?.total || 0,
+      wonLeads: wonLeads?.total || 0,
+      lostLeads: lostLeads?.total || 0
+    };
+  }
+
   return {
     findById,
     findByExternalKey,
@@ -127,7 +197,12 @@ function createLeadsRepository(db) {
     updateIdentity,
     updateInboundCounters,
     updateAfterAnalysis,
-    listActiveLeads
+    updateManualStatus,
+    updateOwner,
+    updateOutboundCounters,
+    touchUpdatedAt,
+    listActiveLeads,
+    metricsSummary
   };
 }
 

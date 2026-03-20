@@ -95,6 +95,36 @@ Fluxo principal:
 - `GET /api/media-proxy`
 - `POST /api/whatsapp/webhook`
 
+## API v1 (Novos Endpoints)
+- Auth:
+- `POST /api/v1/auth/otp/request`
+- `POST /api/v1/auth/otp/verify`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+- Conversations:
+- `GET /api/v1/conversations`
+- `GET /api/v1/conversations/:conversationId`
+- `GET /api/v1/conversations/:conversationId/messages`
+- `PATCH /api/v1/conversations/:conversationId/status`
+- `PATCH /api/v1/conversations/:conversationId/owner`
+- `GET /api/v1/conversations/:conversationId/insights`
+- `POST /api/v1/conversations/:conversationId/messages`
+- Messages:
+- `GET /api/v1/messages/:messageId`
+- Templates:
+- `GET /api/v1/templates`
+- `POST /api/v1/templates`
+- `PATCH /api/v1/templates/:templateId`
+- `POST /api/v1/templates/:templateId/send`
+- Support:
+- `GET /api/v1/operators`
+- `GET /api/v1/dashboard/metrics`
+- `GET /api/v1/events`
+- Provider webhooks:
+- `POST /api/v1/providers/whatsapp/webhooks/inbound`
+- `POST /api/v1/providers/whatsapp/webhooks/status`
+
 ## Contratos e Limites
 - API HTTP deve manter paridade de comportamento.
 - Schema SQLite e semantica de dados devem permanecer iguais.
