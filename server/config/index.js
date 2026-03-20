@@ -40,13 +40,12 @@ function loadConfig({ rootDir }) {
   const twilioMessagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID || "";
   const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || "").trim();
 
-  const supabaseProjectUrl = String(process.env.SUPABASE_PROJECT_URL || "").trim();
+  const supabaseProjectUrl = String(process.env.SUPABASE_PROJECT_URL || process.env.SUPABASE_URL || "").trim();
   const supabasePublishableKey = String(process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
   const supabaseSecretKey = String(process.env.SUPBASE_SECRET_KEY || process.env.SUPABASE_SECRET_KEY || "").trim();
-  const dbConnectionString = String(process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || "").trim();
 
-  if (!dbConnectionString) {
-    throw new Error("DATABASE_URL (ou SUPABASE_DB_URL) é obrigatório para conectar no Postgres do Supabase.");
+  if (!supabaseProjectUrl || !supabaseSecretKey) {
+    throw new Error("SUPABASE_URL (ou SUPABASE_PROJECT_URL) e SUPABASE_SECRET_KEY são obrigatórios.");
   }
 
   const config = {
@@ -59,7 +58,8 @@ function loadConfig({ rootDir }) {
       publicDir: path.join(rootDir, "public")
     },
     db: {
-      connectionString: dbConnectionString
+      supabaseUrl: supabaseProjectUrl,
+      supabaseSecretKey
     },
     supabase: {
       projectUrl: supabaseProjectUrl,

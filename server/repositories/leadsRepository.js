@@ -1,193 +1,165 @@
 "use strict";
 
+const { assertNoError, toInt } = require("./supabaseUtils");
+
 function createLeadsRepository(db) {
   async function findById(leadId) {
-    return db.get("SELECT * FROM leads WHERE id = ?", [leadId]);
+    const { data, error } = await db.from("leads").select("*").eq("id", leadId).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function findByExternalKey(externalKey) {
-    return db.get("SELECT * FROM leads WHERE external_key = ?", [externalKey]);
+    const { data, error } = await db.from("leads").select("*").eq("external_key", externalKey).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function insertLead(input) {
-    await db.run(
-      `
-        INSERT INTO leads (
-          id, external_key, phone, whatsapp_from, wa_id, name, source, status, pipeline_position, priority_score, temperature,
-          last_message, last_message_preview, unread_count, message_count_total, inbound_count, outbound_count, media_count,
-          messages_after_last_resume, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.externalKey,
-        input.phone,
-        input.whatsappFrom,
-        input.waId,
-        input.name,
-        input.source,
-        input.status,
-        input.pipelinePosition,
-        input.priorityScore,
-        input.temperature,
-        input.lastMessage,
-        input.lastMessagePreview,
-        input.unreadCount,
-        input.messageCountTotal,
-        input.inboundCount,
-        input.outboundCount,
-        input.mediaCount,
-        input.messagesAfterLastResume,
-        input.createdAt,
-        input.updatedAt
-      ]
-    );
+    const { error } = await db.from("leads").insert({
+      id: input.id,
+      external_key: input.externalKey,
+      phone: input.phone,
+      whatsapp_from: input.whatsappFrom,
+      wa_id: input.waId,
+      name: input.name,
+      source: input.source,
+      status: input.status,
+      pipeline_position: input.pipelinePosition,
+      priority_score: input.priorityScore,
+      temperature: input.temperature,
+      last_message: input.lastMessage,
+      last_message_preview: input.lastMessagePreview,
+      unread_count: input.unreadCount,
+      message_count_total: input.messageCountTotal,
+      inbound_count: input.inboundCount,
+      outbound_count: input.outboundCount,
+      media_count: input.mediaCount,
+      messages_after_last_resume: input.messagesAfterLastResume,
+      created_at: input.createdAt,
+      updated_at: input.updatedAt
+    });
+    assertNoError(error);
   }
 
   async function updateIdentity(input) {
-    await db.run(
-      "UPDATE leads SET phone = ?, whatsapp_from = ?, wa_id = ?, name = ?, updated_at = ? WHERE id = ?",
-      [input.phone, input.whatsappFrom, input.waId, input.name, input.updatedAt, input.id]
-    );
+    const { error } = await db.from("leads").update({
+      phone: input.phone,
+      whatsapp_from: input.whatsappFrom,
+      wa_id: input.waId,
+      name: input.name,
+      updated_at: input.updatedAt
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function updateInboundCounters(input) {
-    await db.run(
-      `
-        UPDATE leads
-        SET
-          last_message = ?, last_message_preview = ?, last_message_at = ?, last_inbound_at = ?, unread_count = COALESCE(unread_count, 0) + 1,
-          message_count_total = COALESCE(message_count_total, 0) + 1, inbound_count = COALESCE(inbound_count, 0) + 1,
-          media_count = COALESCE(media_count, 0) + ?, messages_after_last_resume = COALESCE(messages_after_last_resume, 0) + 1,
-          priority_score = ?, temperature = ?, pipeline_position = ?, updated_at = ?
-        WHERE id = ?
-      `,
-      [
-        input.preview,
-        input.preview,
-        input.timestamp,
-        input.timestamp,
-        input.mediaCount,
-        input.priorityScore,
-        input.temperature,
-        input.pipelinePosition,
-        input.timestamp,
-        input.id
-      ]
-    );
+    const current = await findById(input.id);
+    if (!current) return;
+    const { error } = await db.from("leads").update({
+      last_message: input.preview,
+      last_message_preview: input.preview,
+      last_message_at: input.timestamp,
+      last_inbound_at: input.timestamp,
+      unread_count: toInt(current.unread_count) + 1,
+      message_count_total: toInt(current.message_count_total) + 1,
+      inbound_count: toInt(current.inbound_count) + 1,
+      media_count: toInt(current.media_count) + toInt(input.mediaCount),
+      messages_after_last_resume: toInt(current.messages_after_last_resume) + 1,
+      priority_score: input.priorityScore,
+      temperature: input.temperature,
+      pipeline_position: input.pipelinePosition,
+      updated_at: input.timestamp
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function updateAfterAnalysis(input) {
-    await db.run(
-      `
-        UPDATE leads
-        SET status = ?, pipeline_position = ?, priority_score = ?, temperature = ?, ai_summary = ?, ai_last_reason = ?, ai_last_confidence = ?,
-            messages_after_last_resume = 0, last_analyzed_message_id = ?, last_analysis_at = ?, updated_at = ?
-        WHERE id = ?
-      `,
-      [
-        input.status,
-        input.pipelinePosition,
-        input.priorityScore,
-        input.temperature,
-        input.aiSummary,
-        input.aiLastReason,
-        input.aiLastConfidence,
-        input.lastAnalyzedMessageId,
-        input.lastAnalysisAt,
-        input.updatedAt,
-        input.id
-      ]
-    );
+    const { error } = await db.from("leads").update({
+      status: input.status,
+      pipeline_position: input.pipelinePosition,
+      priority_score: input.priorityScore,
+      temperature: input.temperature,
+      ai_summary: input.aiSummary,
+      ai_last_reason: input.aiLastReason,
+      ai_last_confidence: input.aiLastConfidence,
+      messages_after_last_resume: 0,
+      last_analyzed_message_id: input.lastAnalyzedMessageId,
+      last_analysis_at: input.lastAnalysisAt,
+      updated_at: input.updatedAt
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function updateManualStatus(input) {
-    await db.run(
-      `
-        UPDATE leads
-        SET status = ?, pipeline_position = ?, updated_at = ?
-        WHERE id = ?
-      `,
-      [input.status, input.pipelinePosition, input.updatedAt, input.id]
-    );
+    const { error } = await db.from("leads").update({
+      status: input.status,
+      pipeline_position: input.pipelinePosition,
+      updated_at: input.updatedAt
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function updateOwner(input) {
-    await db.run(
-      "UPDATE leads SET owner_id = ?, owner_name = ?, updated_at = ? WHERE id = ?",
-      [input.ownerId || null, input.ownerName || null, input.updatedAt, input.id]
-    );
+    const { error } = await db.from("leads").update({
+      owner_id: input.ownerId || null,
+      owner_name: input.ownerName || null,
+      updated_at: input.updatedAt
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function updateOutboundCounters(input) {
-    await db.run(
-      `
-        UPDATE leads
-        SET
-          last_message = ?, last_message_preview = ?, last_message_at = ?, last_outbound_at = ?,
-          message_count_total = COALESCE(message_count_total, 0) + 1, outbound_count = COALESCE(outbound_count, 0) + 1,
-          updated_at = ?
-        WHERE id = ?
-      `,
-      [input.preview, input.preview, input.timestamp, input.timestamp, input.timestamp, input.id]
-    );
+    const current = await findById(input.id);
+    if (!current) return;
+    const { error } = await db.from("leads").update({
+      last_message: input.preview,
+      last_message_preview: input.preview,
+      last_message_at: input.timestamp,
+      last_outbound_at: input.timestamp,
+      message_count_total: toInt(current.message_count_total) + 1,
+      outbound_count: toInt(current.outbound_count) + 1,
+      updated_at: input.timestamp
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function touchUpdatedAt(input) {
-    await db.run("UPDATE leads SET updated_at = ? WHERE id = ?", [input.updatedAt, input.id]);
+    const { error } = await db.from("leads").update({ updated_at: input.updatedAt }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function listActiveLeads(filters) {
-    const where = ["archived = 0"];
-    const params = [];
+    let query = db.from("leads").select("*").eq("archived", 0);
+    if (filters.status) query = query.eq("status", filters.status);
+    if (filters.temperature) query = query.eq("temperature", filters.temperature);
 
-    if (filters.status) {
-      where.push("status = ?");
-      params.push(filters.status);
-    }
-    if (filters.temperature) {
-      where.push("temperature = ?");
-      params.push(filters.temperature);
-    }
+    const { data, error } = await query.order("priority_score", { ascending: false }).order("last_message_at", { ascending: false });
+    assertNoError(error);
+    return data || [];
+  }
 
-    return db.all(
-      `SELECT * FROM leads WHERE ${where.join(" AND ")} ORDER BY priority_score DESC, last_message_at DESC`,
-      params
-    );
+  async function countByFilters(input, extra = {}) {
+    let query = db.from("leads").select("id", { count: "exact", head: true }).eq("archived", 0);
+    if (input.ownerId) query = query.eq("owner_id", input.ownerId);
+    if (input.from) query = query.gte("updated_at", input.from);
+    if (input.to) query = query.lte("updated_at", input.to);
+    if (extra.temperature) query = query.eq("temperature", extra.temperature);
+    if (extra.status) query = query.eq("status", extra.status);
+    const { count, error } = await query;
+    assertNoError(error);
+    return count || 0;
   }
 
   async function metricsSummary(input) {
-    const where = ["archived = 0"];
-    const params = [];
-
-    if (input.ownerId) {
-      where.push("owner_id = ?");
-      params.push(input.ownerId);
-    }
-    if (input.from) {
-      where.push("updated_at >= ?");
-      params.push(input.from);
-    }
-    if (input.to) {
-      where.push("updated_at <= ?");
-      params.push(input.to);
-    }
-
-    const baseWhere = where.join(" AND ");
-
-    const [totals, hotLeads, wonLeads, lostLeads] = await Promise.all([
-      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere}`, params),
-      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere} AND temperature = 'hot'`, params),
-      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere} AND status = 'ganho'`, params),
-      db.get(`SELECT COUNT(*) AS total FROM leads WHERE ${baseWhere} AND status = 'perdido'`, params)
+    const [totalLeads, hotLeads, wonLeads, lostLeads] = await Promise.all([
+      countByFilters(input),
+      countByFilters(input, { temperature: "hot" }),
+      countByFilters(input, { status: "ganho" }),
+      countByFilters(input, { status: "perdido" })
     ]);
 
-    return {
-      totalLeads: totals?.total || 0,
-      hotLeads: hotLeads?.total || 0,
-      wonLeads: wonLeads?.total || 0,
-      lostLeads: lostLeads?.total || 0
-    };
+    return { totalLeads, hotLeads, wonLeads, lostLeads };
   }
 
   return {
@@ -206,6 +178,4 @@ function createLeadsRepository(db) {
   };
 }
 
-module.exports = {
-  createLeadsRepository
-};
+module.exports = { createLeadsRepository };

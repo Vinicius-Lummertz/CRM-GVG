@@ -1,125 +1,126 @@
 "use strict";
 
+const { assertNoError } = require("./supabaseUtils");
+
 function createAuthRepository(db) {
   async function createOtpChallenge(input) {
-    await db.run(
-      `
-        INSERT INTO otp_challenges (id, phone, channel, code_hash, status, attempts, max_attempts, expires_at, provider_message_id, last_error, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.phone,
-        input.channel,
-        input.codeHash,
-        input.status,
-        input.attempts,
-        input.maxAttempts,
-        input.expiresAt,
-        input.providerMessageId || null,
-        input.lastError || null,
-        input.createdAt,
-        input.updatedAt
-      ]
-    );
+    const { error } = await db.from("otp_challenges").insert({
+      id: input.id,
+      phone: input.phone,
+      channel: input.channel,
+      code_hash: input.codeHash,
+      status: input.status,
+      attempts: input.attempts,
+      max_attempts: input.maxAttempts,
+      expires_at: input.expiresAt,
+      provider_message_id: input.providerMessageId || null,
+      last_error: input.lastError || null,
+      created_at: input.createdAt,
+      updated_at: input.updatedAt
+    });
+    assertNoError(error);
   }
 
   async function findOtpChallengeById(challengeId) {
-    return db.get("SELECT * FROM otp_challenges WHERE id = ?", [challengeId]);
+    const { data, error } = await db.from("otp_challenges").select("*").eq("id", challengeId).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function updateOtpChallenge(input) {
-    await db.run(
-      `
-        UPDATE otp_challenges
-        SET status = ?, attempts = ?, provider_message_id = ?, last_error = ?, updated_at = ?
-        WHERE id = ?
-      `,
-      [input.status, input.attempts, input.providerMessageId || null, input.lastError || null, input.updatedAt, input.id]
-    );
+    const { error } = await db.from("otp_challenges").update({
+      status: input.status,
+      attempts: input.attempts,
+      provider_message_id: input.providerMessageId || null,
+      last_error: input.lastError || null,
+      updated_at: input.updatedAt
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function findOperatorById(operatorId) {
-    return db.get("SELECT * FROM operators WHERE id = ?", [operatorId]);
+    const { data, error } = await db.from("operators").select("*").eq("id", operatorId).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function findOperatorByPhone(phone) {
-    return db.get("SELECT * FROM operators WHERE phone = ?", [phone]);
+    const { data, error } = await db.from("operators").select("*").eq("phone", phone).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function upsertOperator(input) {
     const existing = await findOperatorByPhone(input.phone);
     if (existing) {
-      await db.run("UPDATE operators SET name = COALESCE(?, name), role = COALESCE(?, role), updated_at = ? WHERE id = ?", [
-        input.name || null,
-        input.role || null,
-        input.updatedAt,
-        existing.id
-      ]);
+      const { error } = await db.from("operators").update({
+        name: input.name || existing.name,
+        role: input.role || existing.role,
+        updated_at: input.updatedAt
+      }).eq("id", existing.id);
+      assertNoError(error);
       return findOperatorById(existing.id);
     }
 
-    await db.run(
-      "INSERT INTO operators (id, phone, name, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [input.id, input.phone, input.name || null, input.role || "operator", input.createdAt, input.updatedAt]
-    );
+    const { error } = await db.from("operators").insert({
+      id: input.id,
+      phone: input.phone,
+      name: input.name || null,
+      role: input.role || "operator",
+      created_at: input.createdAt,
+      updated_at: input.updatedAt
+    });
+    assertNoError(error);
     return findOperatorById(input.id);
   }
 
   async function listOperators() {
-    return db.all("SELECT * FROM operators ORDER BY updated_at DESC");
+    const { data, error } = await db.from("operators").select("*").order("updated_at", { ascending: false });
+    assertNoError(error);
+    return data || [];
   }
 
   async function createSession(input) {
-    await db.run(
-      `
-        INSERT INTO auth_sessions (
-          id, operator_id, access_token_hash, refresh_token_hash,
-          access_expires_at, refresh_expires_at, revoked_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.operatorId,
-        input.accessTokenHash,
-        input.refreshTokenHash,
-        input.accessExpiresAt,
-        input.refreshExpiresAt,
-        input.revokedAt || null,
-        input.createdAt,
-        input.updatedAt
-      ]
-    );
+    const { error } = await db.from("auth_sessions").insert({
+      id: input.id,
+      operator_id: input.operatorId,
+      access_token_hash: input.accessTokenHash,
+      refresh_token_hash: input.refreshTokenHash,
+      access_expires_at: input.accessExpiresAt,
+      refresh_expires_at: input.refreshExpiresAt,
+      revoked_at: input.revokedAt || null,
+      created_at: input.createdAt,
+      updated_at: input.updatedAt
+    });
+    assertNoError(error);
   }
 
   async function findSessionByAccessTokenHash(accessTokenHash) {
-    return db.get("SELECT * FROM auth_sessions WHERE access_token_hash = ?", [accessTokenHash]);
+    const { data, error } = await db.from("auth_sessions").select("*").eq("access_token_hash", accessTokenHash).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function findSessionByRefreshTokenHash(refreshTokenHash) {
-    return db.get("SELECT * FROM auth_sessions WHERE refresh_token_hash = ?", [refreshTokenHash]);
+    const { data, error } = await db.from("auth_sessions").select("*").eq("refresh_token_hash", refreshTokenHash).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function rotateSessionTokens(input) {
-    await db.run(
-      `
-        UPDATE auth_sessions
-        SET access_token_hash = ?, refresh_token_hash = ?, access_expires_at = ?, refresh_expires_at = ?, updated_at = ?
-        WHERE id = ?
-      `,
-      [
-        input.accessTokenHash,
-        input.refreshTokenHash,
-        input.accessExpiresAt,
-        input.refreshExpiresAt,
-        input.updatedAt,
-        input.id
-      ]
-    );
+    const { error } = await db.from("auth_sessions").update({
+      access_token_hash: input.accessTokenHash,
+      refresh_token_hash: input.refreshTokenHash,
+      access_expires_at: input.accessExpiresAt,
+      refresh_expires_at: input.refreshExpiresAt,
+      updated_at: input.updatedAt
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function revokeSessionById(sessionId, revokedAt) {
-    await db.run("UPDATE auth_sessions SET revoked_at = ?, updated_at = ? WHERE id = ?", [revokedAt, revokedAt, sessionId]);
+    const { error } = await db.from("auth_sessions").update({ revoked_at: revokedAt, updated_at: revokedAt }).eq("id", sessionId);
+    assertNoError(error);
   }
 
   return {
@@ -138,6 +139,4 @@ function createAuthRepository(db) {
   };
 }
 
-module.exports = {
-  createAuthRepository
-};
+module.exports = { createAuthRepository };

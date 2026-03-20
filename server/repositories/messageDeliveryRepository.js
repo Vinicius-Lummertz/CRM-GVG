@@ -1,23 +1,26 @@
 "use strict";
 
+const { assertNoError } = require("./supabaseUtils");
+
 function createMessageDeliveryRepository(db) {
   async function insertEvent(input) {
-    await db.run(
-      "INSERT INTO message_delivery (id, message_id, delivery_status, provider_payload_json, created_at) VALUES (?, ?, ?, ?, ?)",
-      [input.id, input.messageId, input.deliveryStatus, input.providerPayloadJson || null, input.createdAt]
-    );
+    const { error } = await db.from("message_delivery").insert({
+      id: input.id,
+      message_id: input.messageId,
+      delivery_status: input.deliveryStatus,
+      provider_payload_json: input.providerPayloadJson || null,
+      created_at: input.createdAt
+    });
+    assertNoError(error);
   }
 
   async function listByMessageId(messageId) {
-    return db.all("SELECT * FROM message_delivery WHERE message_id = ? ORDER BY created_at ASC", [messageId]);
+    const { data, error } = await db.from("message_delivery").select("*").eq("message_id", messageId).order("created_at", { ascending: true });
+    assertNoError(error);
+    return data || [];
   }
 
-  return {
-    insertEvent,
-    listByMessageId
-  };
+  return { insertEvent, listByMessageId };
 }
 
-module.exports = {
-  createMessageDeliveryRepository
-};
+module.exports = { createMessageDeliveryRepository };
