@@ -3,90 +3,262 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard de Leads WhatsApp</title>
+    <title>CRM Console v1</title>
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body class="min-h-screen bg-slate-100 text-slate-900">
-    <main class="mx-auto max-w-6xl px-4 py-8 md:px-8">
-      <header class="mb-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-        <p class="text-xs font-semibold uppercase tracking-wider text-emerald-600">Twilio + WhatsApp</p>
-        <h1 class="mt-2 text-3xl font-bold tracking-tight">Dashboard de Leads WhatsApp</h1>
-        <p class="mt-2 text-sm text-slate-600">
-          Atualizacao em tempo real via SSE sempre que o webhook receber nova mensagem.
-        </p>
+    <div id="notice" class="fixed right-4 top-4 z-50 hidden rounded-lg px-4 py-3 text-sm font-medium shadow-lg"></div>
 
-        <div class="mt-5 flex flex-wrap gap-3">
-          <div class="rounded-xl bg-slate-900 px-4 py-3 text-white">
-            <p class="text-xs uppercase text-slate-300">Total de leads</p>
-            <p id="total-leads" class="text-2xl font-semibold">0</p>
-          </div>
-          <div id="connection-pill" class="rounded-xl bg-amber-100 px-4 py-3 text-amber-800">
-            Conectando stream...
+    <main class="mx-auto max-w-7xl px-4 py-6 md:px-8">
+      <section id="auth-screen" class="mx-auto max-w-lg rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700">API v1 Validation</p>
+        <h1 class="mt-2 text-2xl font-bold tracking-tight">Login OTP (WhatsApp)</h1>
+        <p class="mt-1 text-sm text-slate-600">Fluxo rapido para validar endpoints novos do back.</p>
+
+        <div class="mt-6 space-y-4">
+          <label class="block">
+            <span class="mb-1 block text-sm font-medium text-slate-700">Telefone (E.164)</span>
+            <input
+              id="auth-phone"
+              type="text"
+              placeholder="+5548999999999"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-emerald-500 focus:ring"
+            />
+          </label>
+
+          <button
+            id="auth-request-btn"
+            type="button"
+            class="w-full rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+          >
+            Solicitar codigo
+          </button>
+
+          <div id="auth-verify-block" class="hidden space-y-3 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+            <p class="text-xs text-slate-500">Challenge: <span id="auth-challenge-label">-</span></p>
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-slate-700">Codigo OTP</span>
+              <input
+                id="auth-code"
+                type="text"
+                placeholder="000000"
+                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-emerald-500 focus:ring"
+              />
+            </label>
+            <button
+              id="auth-verify-btn"
+              type="button"
+              class="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Verificar codigo
+            </button>
           </div>
         </div>
+      </section>
 
-        <div class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <label class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-            <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Filtro status</span>
-            <select id="filter-status" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
-              <option value="">Todos</option>
-              <option value="lead">lead</option>
-              <option value="em_contato">em_contato</option>
-              <option value="interessado">interessado</option>
-              <option value="proposta_enviada">proposta_enviada</option>
-              <option value="negociando">negociando</option>
-              <option value="ganho">ganho</option>
-              <option value="perdido">perdido</option>
-              <option value="inativo">inativo</option>
-            </select>
-          </label>
+      <section id="app-screen" class="hidden space-y-4">
+        <header class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700">CRM Console v1</p>
+              <h2 class="text-xl font-bold">Inbox + Chat + Templates</h2>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="auth-user-label" class="rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700"></span>
+              <button id="refresh-all-btn" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">
+                Atualizar
+              </button>
+              <button id="logout-btn" class="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-500">
+                Sair
+              </button>
+            </div>
+          </div>
 
-          <label class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-            <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Filtro temperatura</span>
-            <select id="filter-temperature" class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
-              <option value="">Todas</option>
-              <option value="cold">cold</option>
-              <option value="warm">warm</option>
-              <option value="hot">hot</option>
-            </select>
-          </label>
+          <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <article class="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <p class="text-xs text-slate-500">Total leads</p>
+              <p id="metric-total" class="text-lg font-bold">-</p>
+            </article>
+            <article class="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <p class="text-xs text-slate-500">Hot</p>
+              <p id="metric-hot" class="text-lg font-bold">-</p>
+            </article>
+            <article class="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <p class="text-xs text-slate-500">Ganhos</p>
+              <p id="metric-won" class="text-lg font-bold">-</p>
+            </article>
+            <article class="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+              <p class="text-xs text-slate-500">Perdidos</p>
+              <p id="metric-lost" class="text-lg font-bold">-</p>
+            </article>
+          </div>
+        </header>
 
-          <label class="flex items-center gap-2 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-            <input id="filter-attention" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
-            <span class="text-sm font-medium text-slate-700">Somente com atenção necessária</span>
-          </label>
-        </div>
-      </header>
+        <section class="grid grid-cols-1 gap-4 xl:grid-cols-12">
+          <aside class="space-y-3 xl:col-span-4">
+            <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+              <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Filtros inbox</h3>
+              <div class="mt-3 grid grid-cols-1 gap-2">
+                <input id="filter-q" type="text" placeholder="Buscar nome, telefone, preview" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <select id="filter-status" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="">Status: todos</option>
+                  <option value="lead">lead</option>
+                  <option value="em_contato">em_contato</option>
+                  <option value="interessado">interessado</option>
+                  <option value="proposta_enviada">proposta_enviada</option>
+                  <option value="negociando">negociando</option>
+                  <option value="ganho">ganho</option>
+                  <option value="perdido">perdido</option>
+                  <option value="inativo">inativo</option>
+                </select>
+                <select id="filter-temperature" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="">Temperatura: todas</option>
+                  <option value="cold">cold</option>
+                  <option value="warm">warm</option>
+                  <option value="hot">hot</option>
+                </select>
+                <select id="filter-owner" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="">Owner: todos</option>
+                </select>
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                  <input id="filter-attention" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
+                  So atencao requerida
+                </label>
+                <div class="flex gap-2">
+                  <button id="apply-filters-btn" class="flex-1 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">Aplicar</button>
+                  <button id="clear-filters-btn" class="flex-1 rounded-lg bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-300">Limpar</button>
+                </div>
+              </div>
+            </div>
 
-      <section>
-        <div id="lead-list" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"></div>
+            <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+              <div class="mb-2 flex items-center justify-between">
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Conversas</h3>
+                <span id="conversation-count" class="text-xs text-slate-500">0</span>
+              </div>
+              <div id="conversation-list" class="max-h-[58vh] space-y-2 overflow-auto pr-1"></div>
+              <button id="load-more-conversations-btn" class="mt-3 hidden w-full rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                Carregar mais
+              </button>
+            </div>
+          </aside>
+
+          <section class="space-y-3 xl:col-span-8">
+            <div id="conversation-empty" class="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+              Selecione uma conversa para abrir o chat.
+            </div>
+
+            <div id="conversation-panel" class="hidden space-y-3">
+              <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="conversation-name" class="text-lg font-bold">-</h3>
+                    <p id="conversation-phone" class="text-sm text-slate-500">-</p>
+                  </div>
+                  <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <label class="text-xs text-slate-500">Status
+                      <select id="conversation-status" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                        <option value="lead">lead</option>
+                        <option value="em_contato">em_contato</option>
+                        <option value="interessado">interessado</option>
+                        <option value="proposta_enviada">proposta_enviada</option>
+                        <option value="negociando">negociando</option>
+                        <option value="ganho">ganho</option>
+                        <option value="perdido">perdido</option>
+                        <option value="inativo">inativo</option>
+                      </select>
+                    </label>
+                    <label class="text-xs text-slate-500">Owner
+                      <select id="conversation-owner" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                        <option value="">Sem owner</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <button id="save-status-btn" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">Salvar status</button>
+                  <button id="save-owner-btn" class="rounded-lg bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-300">Salvar owner</button>
+                </div>
+              </article>
+
+              <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Insights IA</h4>
+                <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <p class="rounded-lg bg-slate-50 p-2 text-sm text-slate-700"><strong>Status:</strong> <span id="insight-status">-</span></p>
+                  <p class="rounded-lg bg-slate-50 p-2 text-sm text-slate-700"><strong>Temperatura:</strong> <span id="insight-temp">-</span></p>
+                  <p class="rounded-lg bg-slate-50 p-2 text-sm text-slate-700"><strong>Confianca:</strong> <span id="insight-confidence">-</span></p>
+                  <p class="rounded-lg bg-slate-50 p-2 text-sm text-slate-700"><strong>Orcamento:</strong> <span id="insight-budget">-</span></p>
+                </div>
+                <p id="insight-summary" class="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">-</p>
+              </article>
+
+              <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div class="mb-2 flex items-center justify-between">
+                  <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Mensagens</h4>
+                  <button id="reload-messages-btn" class="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">Recarregar</button>
+                </div>
+                <div id="message-list" class="max-h-[42vh] space-y-2 overflow-auto rounded-xl bg-slate-50 p-3"></div>
+              </article>
+
+              <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Enviar mensagem</h4>
+                <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <label class="text-xs text-slate-500">Tipo
+                    <select id="send-type" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                      <option value="text">Texto</option>
+                      <option value="template">Template</option>
+                    </select>
+                  </label>
+                  <label class="text-xs text-slate-500">Modo
+                    <select id="send-mode" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                      <option value="real">real</option>
+                      <option value="simulated">simulated</option>
+                    </select>
+                  </label>
+                  <label class="text-xs text-slate-500">Idempotency key
+                    <input id="send-idempotency" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+                  </label>
+                </div>
+
+                <div id="send-text-block" class="mt-2">
+                  <textarea id="send-body" rows="3" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Digite a mensagem..."></textarea>
+                </div>
+
+                <div id="send-template-block" class="mt-2 hidden space-y-2">
+                  <select id="send-template-id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="">Selecione um template</option>
+                  </select>
+                  <textarea id="send-template-vars" rows="3" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder='{"nome":"Cliente"}'></textarea>
+                </div>
+
+                <button id="send-message-btn" class="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600">
+                  Enviar
+                </button>
+              </article>
+            </div>
+
+            <article class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+              <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Templates (CRUD rapido)</h4>
+              <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                <input id="tpl-name" type="text" placeholder="Nome" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input id="tpl-language" type="text" value="pt_BR" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input id="tpl-category" type="text" value="utility" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <input id="tpl-vars" type="text" placeholder="nome,valor" class="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+              <textarea id="tpl-body" rows="3" class="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Texto do template, ex: Ola {{nome}}"></textarea>
+
+              <div class="mt-2 flex flex-wrap gap-2">
+                <select id="tpl-select" class="min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  <option value="">Selecionar template existente</option>
+                </select>
+                <button id="tpl-create-btn" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">Criar template</button>
+                <button id="tpl-update-btn" class="rounded-lg bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-300">Atualizar selecionado</button>
+              </div>
+            </article>
+          </section>
+        </section>
       </section>
     </main>
-
-    <div
-      id="media-modal"
-      class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/70 p-4 opacity-0 transition-opacity duration-200"
-      aria-hidden="true"
-    >
-      <div
-        id="media-modal-panel"
-        class="relative w-full max-w-4xl scale-95 transform rounded-2xl bg-white p-3 shadow-2xl transition-transform duration-200"
-      >
-        <button
-          id="media-modal-close"
-          type="button"
-          class="absolute right-3 top-3 rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700"
-        >
-          Fechar
-        </button>
-        <img
-          id="media-modal-image"
-          src=""
-          alt="Midia ampliada"
-          class="max-h-[80vh] w-full rounded-xl bg-slate-100 object-contain"
-        />
-      </div>
-    </div>
 
     <script src="/app.js"></script>
   </body>

@@ -1,6 +1,6 @@
 "use strict";
 
-const { sha256, randomCode, randomToken, toIsoAfterMinutes, isExpired } = require("../../domain/security");
+const { sha256, verifySha256Hash, randomCode, randomToken, toIsoAfterMinutes, isExpired } = require("../../domain/security");
 
 function normalizePhone(phone) {
   return String(phone || "").replace(/\s+/g, "").trim();
@@ -12,16 +12,25 @@ function createAuthService({ repositories, generateId, nowIso, authConfig, whats
     if (!phone) {
       throw new Error("phone_e164 is required.");
     }
+    if (!/^\+\d{8,15}$/.test(phone)) {
+      throw new Error("phone_e164 must be a valid E.164 number.");
+    }
 
     const code = randomCode(6);
     const challengeId = generateId("otp");
     const createdAt = nowIso();
     const expiresAt = toIsoAfterMinutes(authConfig.otpTtlMinutes);
 
-    let status = "sent_simulated";
+    let status = "pending";
     let providerMessageId = null;
     let lastError = null;
-    const debugCode = !whatsappProvider.hasCredentials && process.env.NODE_ENV !== "production" ? code : null;
+    const debugCode = authConfig.allowDebugOtp && process.env.NODE_ENV !== "production" ? code : null;
+
+    if (!whatsappProvider.hasCredentials && !authConfig.allowDebugOtp) {
+      throw new Error(
+        "OTP provider is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_FROM or TWILIO_MESSAGING_SERVICE_SID."
+      );
+    }
 
     try {
       if (whatsappProvider.hasCredentials) {
@@ -31,6 +40,8 @@ function createAuthService({ repositories, generateId, nowIso, authConfig, whats
         });
         providerMessageId = sendResult.providerMessageId;
         status = "sent";
+      } else {
+        status = "sent_debug";
       }
     } catch (err) {
       status = "failed";
@@ -52,6 +63,10 @@ function createAuthService({ repositories, generateId, nowIso, authConfig, whats
       updatedAt: createdAt
     });
 
+    if (status === "failed") {
+      throw new Error(lastError || "Failed to send OTP.");
+    }
+
     return {
       challengeId,
       expiresAt,
@@ -70,6 +85,9 @@ function createAuthService({ repositories, generateId, nowIso, authConfig, whats
     if (challenge.status === "verified") {
       throw new Error("OTP challenge already verified.");
     }
+    if (challenge.status === "failed") {
+      throw new Error("OTP challenge failed to deliver. Request a new code.");
+    }
 
     if (isExpired(challenge.expires_at)) {
       await repositories.auth.updateOtpChallenge({
@@ -86,7 +104,7 @@ function createAuthService({ repositories, generateId, nowIso, authConfig, whats
     const nextAttempts = Number(challenge.attempts || 0) + 1;
     const maxAttempts = Number(challenge.max_attempts || authConfig.otpMaxAttempts);
 
-    if (sha256(String(code || "")) !== challenge.code_hash) {
+    if (!verifySha256Hash(String(code || ""), challenge.code_hash)) {
       await repositories.auth.updateOtpChallenge({
         id: challenge.id,
         status: nextAttempts >= maxAttempts ? "failed" : challenge.status,

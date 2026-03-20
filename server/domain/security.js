@@ -6,6 +6,16 @@ function sha256(value) {
   return crypto.createHash("sha256").update(String(value || "")).digest("hex");
 }
 
+function verifySha256Hash(rawValue, storedHash) {
+  const normalizedStored = String(storedHash || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(normalizedStored)) return false;
+  const computed = sha256(rawValue);
+  const left = Buffer.from(computed, "hex");
+  const right = Buffer.from(normalizedStored, "hex");
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
 function randomCode(length = 6) {
   const max = 10 ** length;
   const min = 10 ** (length - 1);
@@ -28,6 +38,7 @@ function isExpired(iso) {
 
 module.exports = {
   sha256,
+  verifySha256Hash,
   randomCode,
   randomToken,
   toIsoAfterMinutes,

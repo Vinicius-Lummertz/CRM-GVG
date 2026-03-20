@@ -36,7 +36,8 @@ function loadConfig({ rootDir }) {
   const aiModel = String(process.env.GEMINI_MODEL || process.env.OPENAI_MODEL || "gemini-3.1-flash-lite-preview").trim();
   const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID || "";
   const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN || "";
-  const twilioWhatsappFrom = process.env.TWILIO_WHATSAPP_FROM || "";
+  const twilioWhatsappFrom = process.env.TWILIO_WHATSAPP_FROM || process.env.TWILIO_PHONE_NUMBER || "";
+  const twilioMessagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID || "";
   const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || "").trim();
 
   const config = {
@@ -60,12 +61,14 @@ function loadConfig({ rootDir }) {
       otpTtlMinutes: Number.parseInt(String(process.env.OTP_TTL_MINUTES || "5"), 10) || 5,
       otpMaxAttempts: Number.parseInt(String(process.env.OTP_MAX_ATTEMPTS || "5"), 10) || 5,
       accessTtlMinutes: Number.parseInt(String(process.env.AUTH_ACCESS_TTL_MINUTES || "30"), 10) || 30,
-      refreshTtlMinutes: Number.parseInt(String(process.env.AUTH_REFRESH_TTL_MINUTES || "10080"), 10) || 10080
+      refreshTtlMinutes: Number.parseInt(String(process.env.AUTH_REFRESH_TTL_MINUTES || "10080"), 10) || 10080,
+      allowDebugOtp: String(process.env.ALLOW_DEBUG_OTP || "false").toLowerCase() === "true"
     },
     twilio: {
       accountSid: twilioAccountSid,
       authToken: twilioAuthToken,
       whatsappFrom: twilioWhatsappFrom,
+      messagingServiceSid: twilioMessagingServiceSid,
       statusCallbackUrl: publicBaseUrl ? `${publicBaseUrl.replace(/\/$/, "")}/api/v1/providers/whatsapp/webhooks/status` : "",
       mediaHosts: ["api.twilio.com", "mms.twiliocdn.com"]
     }

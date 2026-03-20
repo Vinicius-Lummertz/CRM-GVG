@@ -22,6 +22,7 @@ async function startServer(config) {
     accountSid: config.twilio.accountSid,
     authToken: config.twilio.authToken,
     fromNumber: config.twilio.whatsappFrom,
+    messagingServiceSid: config.twilio.messagingServiceSid,
     statusCallbackUrl: config.twilio.statusCallbackUrl
   });
 

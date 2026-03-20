@@ -9,19 +9,27 @@ function normalizeWhatsappAddress(value) {
   return raw.startsWith("whatsapp:") ? raw : `whatsapp:${raw}`;
 }
 
-function createWhatsappProvider({ accountSid, authToken, fromNumber, statusCallbackUrl }) {
-  const hasCredentials = Boolean(accountSid && authToken && fromNumber);
+function createWhatsappProvider({ accountSid, authToken, fromNumber, messagingServiceSid, statusCallbackUrl }) {
+  const hasSender = Boolean(String(fromNumber || "").trim() || String(messagingServiceSid || "").trim());
+  const hasCredentials = Boolean(accountSid && authToken && hasSender);
 
   async function sendTextMessage(input) {
     if (!hasCredentials) {
-      throw new Error("WhatsApp provider is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_FROM.");
+      throw new Error(
+        "WhatsApp provider is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_FROM (or TWILIO_MESSAGING_SERVICE_SID)."
+      );
     }
 
     const postBody = {
       To: normalizeWhatsappAddress(input.to),
-      From: normalizeWhatsappAddress(fromNumber),
       Body: String(input.body || "")
     };
+
+    if (messagingServiceSid) {
+      postBody.MessagingServiceSid = String(messagingServiceSid).trim();
+    } else {
+      postBody.From = normalizeWhatsappAddress(fromNumber);
+    }
 
     if (statusCallbackUrl) {
       postBody.StatusCallback = statusCallbackUrl;
