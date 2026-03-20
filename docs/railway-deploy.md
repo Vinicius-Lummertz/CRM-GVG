@@ -16,6 +16,7 @@ No serviço da API (`Variables`), adicione:
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPBASE_SECRET_KEY`
 - `DATABASE_URL` = conexão Postgres do Supabase
+- `PG_FAMILY` = `4` (força IPv4 e evita erro `ENETUNREACH` em ambientes sem rota IPv6)
 - Demais segredos que você já usa (Twilio/AI)
 
 Use o arquivo `.env.example` como checklist.
@@ -35,5 +36,6 @@ O `start` já sobe `server.js`, que inicializa a API em `server/`.
 
 ## 5) Troubleshooting rápido
 - **Erro de conexão no banco:** revise `DATABASE_URL`.
+- **Erro `ENETUNREACH` com endereço IPv6:** mantenha `PG_FAMILY=4` para forçar conexão IPv4.
 - **Erro de auth/forbidden no banco:** confirme se a URL é de conexão Postgres e não URL REST.
 - **Webhook externo falhando:** revise `PUBLIC_BASE_URL` e secrets Twilio.

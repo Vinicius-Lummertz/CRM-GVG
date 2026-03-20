@@ -305,8 +305,10 @@ async function ensureSchema(db) {
 }
 
 async function initDb(connectionString) {
+  const preferredFamily = Number.parseInt(String(process.env.PG_FAMILY || "4"), 10);
   const pool = new Pool({
     connectionString,
+    family: Number.isNaN(preferredFamily) ? 4 : preferredFamily,
     ssl: connectionString.includes("supabase.co") ? { rejectUnauthorized: false } : undefined
   });
 
