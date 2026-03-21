@@ -3,11 +3,18 @@
 ## 1) Pré-requisitos
 - Repositório já conectado no Railway.
 - Projeto Supabase criado.
-- Tabelas já criadas no Supabase (via SQL Editor/Migrations do Supabase).
+- Tabelas criadas no Supabase com o script `db/schema.sql` deste repositório.
 
-> Importante: a API agora usa `@supabase/supabase-js` (HTTPS/porta 443), sem conexão direta PostgreSQL na porta 5432.
+> Importante: a API usa `@supabase/supabase-js` (HTTPS/porta 443), sem conexão direta PostgreSQL na porta 5432.
 
-## 2) Configurar variáveis no Railway
+## 2) Criar schema no Supabase (obrigatório)
+1. Abra o Supabase Dashboard > **SQL Editor**.
+2. Copie e execute o conteúdo de `db/schema.sql`.
+3. Confirme que tabelas como `otp_challenges`, `operators` e `auth_sessions` foram criadas.
+
+A API agora valida no startup se as tabelas obrigatórias existem. Se faltar alguma, o processo falha com mensagem explícita para executar `db/schema.sql`.
+
+## 3) Configurar variáveis no Railway
 No serviço da API (`Variables`), adicione:
 
 - `PORT` = `3000` (opcional, Railway costuma injetar automaticamente)
@@ -19,21 +26,21 @@ No serviço da API (`Variables`), adicione:
 
 Use o arquivo `.env.example` como checklist.
 
-## 3) Configuração de build/start
+## 4) Configuração de build/start
 A API usa:
 - Build: `npm install`
 - Start: `npm start`
 
 O `start` já sobe `server.js`, que inicializa a API em `server/`.
 
-## 4) Primeiro deploy
+## 5) Primeiro deploy
 1. Faça push para a branch conectada.
 2. Abra o deploy no Railway e acompanhe logs.
 3. Você deve ver no log: `"[db] Supabase SDK inicializado"`.
 4. Teste endpoint de health da API (ex: `/api/health`).
 
-## 5) Troubleshooting rápido
+## 6) Troubleshooting rápido
+- **Erro `Could not find the table ... in the schema cache`:** faltou rodar `db/schema.sql` no Supabase.
 - **Erro de env obrigatória:** revise `SUPABASE_URL`/`SUPABASE_PROJECT_URL` e `SUPABASE_SECRET_KEY`/`SUPBASE_SECRET_KEY`.
 - **Erro de permissão (`401/403`)**: confira a chave secreta de servidor.
-- **Erro de tabela inexistente:** execute o DDL no SQL Editor do Supabase antes do deploy.
 - **Webhook externo falhando:** revise `PUBLIC_BASE_URL` e secrets Twilio.
