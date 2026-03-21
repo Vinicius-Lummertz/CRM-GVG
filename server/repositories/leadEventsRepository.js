@@ -1,33 +1,25 @@
 "use strict";
 
+const { assertNoError } = require("./supabaseUtils");
+
 function createLeadEventsRepository(db) {
   async function insertEvent(input) {
-    await db.run(
-      `
-        INSERT INTO lead_events (
-          id, lead_id, event_type, old_status, new_status, title, description, confidence, source, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.leadId,
-        input.eventType,
-        input.oldStatus,
-        input.newStatus,
-        input.title,
-        input.description,
-        input.confidence,
-        input.source,
-        input.createdAt
-      ]
-    );
+    const { error } = await db.from("lead_events").insert({
+      id: input.id,
+      lead_id: input.leadId,
+      event_type: input.eventType,
+      old_status: input.oldStatus,
+      new_status: input.newStatus,
+      title: input.title,
+      description: input.description,
+      confidence: input.confidence,
+      source: input.source,
+      created_at: input.createdAt
+    });
+    assertNoError(error);
   }
 
-  return {
-    insertEvent
-  };
+  return { insertEvent };
 }
 
-module.exports = {
-  createLeadEventsRepository
-};
+module.exports = { createLeadEventsRepository };

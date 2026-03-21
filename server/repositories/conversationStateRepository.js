@@ -1,93 +1,80 @@
 "use strict";
 
+const { assertNoError, toInt } = require("./supabaseUtils");
+
 function createConversationStateRepository(db) {
   async function findByLeadId(leadId) {
-    return db.get("SELECT * FROM conversation_state WHERE lead_id = ?", [leadId]);
+    const { data, error } = await db.from("conversation_state").select("*").eq("lead_id", leadId).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function insertState(input) {
-    await db.run(
-      `
-        INSERT INTO conversation_state (
-          id, lead_id, current_status, current_stage_label, ai_summary, ai_short_summary, ai_last_reason, ai_last_confidence,
-          budget_text, messages_after_last_resume, attention_required, sentiment, interest_level, risk_level, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.leadId,
-        input.currentStatus,
-        input.currentStageLabel,
-        input.aiSummary,
-        input.aiShortSummary,
-        input.aiLastReason,
-        input.aiLastConfidence,
-        input.budgetText || "Nao informado.",
-        input.messagesAfterLastResume,
-        input.attentionRequired,
-        input.sentiment,
-        input.interestLevel,
-        input.riskLevel,
-        input.createdAt,
-        input.updatedAt
-      ]
-    );
+    const { error } = await db.from("conversation_state").insert({
+      id: input.id,
+      lead_id: input.leadId,
+      current_status: input.currentStatus,
+      current_stage_label: input.currentStageLabel,
+      ai_summary: input.aiSummary,
+      ai_short_summary: input.aiShortSummary,
+      ai_last_reason: input.aiLastReason,
+      ai_last_confidence: input.aiLastConfidence,
+      budget_text: input.budgetText || "Nao informado.",
+      messages_after_last_resume: input.messagesAfterLastResume,
+      attention_required: input.attentionRequired,
+      sentiment: input.sentiment,
+      interest_level: input.interestLevel,
+      risk_level: input.riskLevel,
+      created_at: input.createdAt,
+      updated_at: input.updatedAt
+    });
+    assertNoError(error);
   }
 
   async function updateAfterInbound(input) {
-    await db.run(
-      "UPDATE conversation_state SET current_status = ?, messages_after_last_resume = COALESCE(messages_after_last_resume, 0) + 1, updated_at = ? WHERE lead_id = ?",
-      [input.currentStatus, input.updatedAt, input.leadId]
-    );
+    const current = await findByLeadId(input.leadId);
+    const nextCount = toInt(current?.messages_after_last_resume) + 1;
+    const { error } = await db.from("conversation_state").update({
+      current_status: input.currentStatus,
+      messages_after_last_resume: nextCount,
+      updated_at: input.updatedAt
+    }).eq("lead_id", input.leadId);
+    assertNoError(error);
   }
 
   async function updateCurrentStatus(input) {
-    await db.run(
-      "UPDATE conversation_state SET current_status = ?, current_stage_label = ?, updated_at = ? WHERE lead_id = ?",
-      [input.currentStatus, input.currentStatus, input.updatedAt, input.leadId]
-    );
+    const { error } = await db.from("conversation_state").update({
+      current_status: input.currentStatus,
+      current_stage_label: input.currentStatus,
+      updated_at: input.updatedAt
+    }).eq("lead_id", input.leadId);
+    assertNoError(error);
   }
 
   async function updateAfterAnalysis(input) {
-    await db.run(
-      `
-        UPDATE conversation_state
-        SET current_status = ?, current_stage_label = ?, ai_summary = ?, ai_short_summary = ?, ai_last_reason = ?, ai_last_confidence = ?,
-            budget_text = ?, messages_after_last_resume = 0, last_analyzed_message_id = ?, last_analysis_at = ?, last_trigger_reason = ?, attention_required = ?,
-            sentiment = ?, interest_level = ?, risk_level = ?, next_action = ?, updated_at = ?
-        WHERE lead_id = ?
-      `,
-      [
-        input.currentStatus,
-        input.currentStageLabel,
-        input.aiSummary,
-        input.aiShortSummary,
-        input.aiLastReason,
-        input.aiLastConfidence,
-        input.budgetText || "Nao informado.",
-        input.lastAnalyzedMessageId,
-        input.lastAnalysisAt,
-        input.lastTriggerReason,
-        input.attentionRequired,
-        input.sentiment,
-        input.interestLevel,
-        input.riskLevel,
-        input.nextAction,
-        input.updatedAt,
-        input.leadId
-      ]
-    );
+    const { error } = await db.from("conversation_state").update({
+      current_status: input.currentStatus,
+      current_stage_label: input.currentStageLabel,
+      ai_summary: input.aiSummary,
+      ai_short_summary: input.aiShortSummary,
+      ai_last_reason: input.aiLastReason,
+      ai_last_confidence: input.aiLastConfidence,
+      budget_text: input.budgetText || "Nao informado.",
+      messages_after_last_resume: 0,
+      last_analyzed_message_id: input.lastAnalyzedMessageId,
+      last_analysis_at: input.lastAnalysisAt,
+      last_trigger_reason: input.lastTriggerReason,
+      attention_required: input.attentionRequired,
+      sentiment: input.sentiment,
+      interest_level: input.interestLevel,
+      risk_level: input.riskLevel,
+      next_action: input.nextAction,
+      updated_at: input.updatedAt
+    }).eq("lead_id", input.leadId);
+    assertNoError(error);
   }
 
-  return {
-    findByLeadId,
-    insertState,
-    updateAfterInbound,
-    updateCurrentStatus,
-    updateAfterAnalysis
-  };
+  return { findByLeadId, insertState, updateAfterInbound, updateCurrentStatus, updateAfterAnalysis };
 }
 
-module.exports = {
-  createConversationStateRepository
-};
+module.exports = { createConversationStateRepository };

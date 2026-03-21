@@ -40,6 +40,14 @@ function loadConfig({ rootDir }) {
   const twilioMessagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID || "";
   const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || "").trim();
 
+  const supabaseProjectUrl = String(process.env.SUPABASE_PROJECT_URL || process.env.SUPABASE_URL || "").trim();
+  const supabasePublishableKey = String(process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const supabaseSecretKey = String(process.env.SUPBASE_SECRET_KEY || process.env.SUPABASE_SECRET_KEY || "").trim();
+
+  if (!supabaseProjectUrl || !supabaseSecretKey) {
+    throw new Error("SUPABASE_URL (ou SUPABASE_PROJECT_URL) e SUPABASE_SECRET_KEY são obrigatórios.");
+  }
+
   const config = {
     rootDir,
     workspace: {
@@ -50,7 +58,13 @@ function loadConfig({ rootDir }) {
       publicDir: path.join(rootDir, "public")
     },
     db: {
-      filePath: path.join(rootDir, "data", "leads.sqlite")
+      supabaseUrl: supabaseProjectUrl,
+      supabaseSecretKey
+    },
+    supabase: {
+      projectUrl: supabaseProjectUrl,
+      publishableKey: supabasePublishableKey,
+      secretKey: supabaseSecretKey
     },
     ai: {
       apiKey,
@@ -79,6 +93,7 @@ function loadConfig({ rootDir }) {
     workspace: Object.freeze(config.workspace),
     app: Object.freeze(config.app),
     db: Object.freeze(config.db),
+    supabase: Object.freeze(config.supabase),
     ai: Object.freeze(config.ai),
     auth: Object.freeze(config.auth),
     twilio: Object.freeze(config.twilio)

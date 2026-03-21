@@ -1,38 +1,29 @@
 "use strict";
 
+const { assertNoError } = require("./supabaseUtils");
+
 function createAiAnalysisRunsRepository(db) {
   async function insertRun(input) {
-    await db.run(
-      `
-        INSERT INTO ai_analysis_runs (
-          id, lead_id, model, trigger_reason, input_messages_count, input_chars_count, old_status, suggested_status, applied_status,
-          confidence, attention_required, request_payload_json, response_payload_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.leadId,
-        input.model,
-        input.triggerReason,
-        input.inputMessagesCount,
-        input.inputCharsCount,
-        input.oldStatus,
-        input.suggestedStatus,
-        input.appliedStatus,
-        input.confidence,
-        input.attentionRequired,
-        input.requestPayloadJson,
-        input.responsePayloadJson,
-        input.createdAt
-      ]
-    );
+    const { error } = await db.from("ai_analysis_runs").insert({
+      id: input.id,
+      lead_id: input.leadId,
+      model: input.model,
+      trigger_reason: input.triggerReason,
+      input_messages_count: input.inputMessagesCount,
+      input_chars_count: input.inputCharsCount,
+      old_status: input.oldStatus,
+      suggested_status: input.suggestedStatus,
+      applied_status: input.appliedStatus,
+      confidence: input.confidence,
+      attention_required: input.attentionRequired,
+      request_payload_json: input.requestPayloadJson,
+      response_payload_json: input.responsePayloadJson,
+      created_at: input.createdAt
+    });
+    assertNoError(error);
   }
 
-  return {
-    insertRun
-  };
+  return { insertRun };
 }
 
-module.exports = {
-  createAiAnalysisRunsRepository
-};
+module.exports = { createAiAnalysisRunsRepository };

@@ -1,95 +1,95 @@
 "use strict";
 
+const { assertNoError } = require("./supabaseUtils");
+
 function createMessagesRepository(db) {
   async function findByLeadAndMessageSid(leadId, messageSid) {
-    return db.get("SELECT id FROM messages WHERE lead_id = ? AND message_sid = ?", [leadId, messageSid]);
+    const { data, error } = await db.from("messages").select("id").eq("lead_id", leadId).eq("message_sid", messageSid).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function findByLeadAndIdempotencyKey(leadId, idempotencyKey) {
     if (!idempotencyKey) return null;
-    return db.get("SELECT * FROM messages WHERE lead_id = ? AND idempotency_key = ?", [leadId, idempotencyKey]);
+    const { data, error } = await db.from("messages").select("*").eq("lead_id", leadId).eq("idempotency_key", idempotencyKey).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function findById(messageId) {
-    return db.get("SELECT * FROM messages WHERE id = ?", [messageId]);
+    const { data, error } = await db.from("messages").select("*").eq("id", messageId).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function getCreatedAtById(leadId, messageId) {
-    return db.get("SELECT created_at FROM messages WHERE id = ? AND lead_id = ?", [messageId, leadId]);
+    const { data, error } = await db.from("messages").select("created_at").eq("id", messageId).eq("lead_id", leadId).maybeSingle();
+    assertNoError(error);
+    return data;
   }
 
   async function insertInboundMessage(input) {
-    await db.run(
-      `
-        INSERT INTO messages (
-          id, lead_id, message_sid, direction, body, preview, message_type, media_count, first_media_url, first_media_content_type,
-          raw_payload_json, ai_relevant, sent_by_customer, delivery_status, mode, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.leadId,
-        input.messageSid,
-        "inbound",
-        input.body,
-        input.preview,
-        input.messageType,
-        input.mediaCount,
-        input.firstMediaUrl,
-        input.firstMediaContentType,
-        input.rawPayloadJson,
-        1,
-        1,
-        "received",
-        input.mode || "real",
-        input.createdAt
-      ]
-    );
+    const { error } = await db.from("messages").insert({
+      id: input.id,
+      lead_id: input.leadId,
+      message_sid: input.messageSid,
+      direction: "inbound",
+      body: input.body,
+      preview: input.preview,
+      message_type: input.messageType,
+      media_count: input.mediaCount,
+      first_media_url: input.firstMediaUrl,
+      first_media_content_type: input.firstMediaContentType,
+      raw_payload_json: input.rawPayloadJson,
+      ai_relevant: 1,
+      sent_by_customer: 1,
+      delivery_status: "received",
+      mode: input.mode || "real",
+      created_at: input.createdAt
+    });
+    assertNoError(error);
   }
 
   async function insertOutboundMessage(input) {
-    await db.run(
-      `
-        INSERT INTO messages (
-          id, lead_id, message_sid, provider_message_id, direction, body, preview, message_type, media_count,
-          first_media_url, first_media_content_type, raw_payload_json, ai_relevant, sent_by_customer,
-          delivery_status, mode, idempotency_key, template_id, queued_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        input.id,
-        input.leadId,
-        input.messageSid || null,
-        input.providerMessageId || null,
-        "outbound",
-        input.body || "",
-        input.preview,
-        input.messageType || "text",
-        input.mediaCount || 0,
-        input.firstMediaUrl || null,
-        input.firstMediaContentType || null,
-        input.rawPayloadJson || null,
-        1,
-        0,
-        input.deliveryStatus || "queued",
-        input.mode || "real",
-        input.idempotencyKey || null,
-        input.templateId || null,
-        input.queuedAt,
-        input.createdAt
-      ]
-    );
+    const { error } = await db.from("messages").insert({
+      id: input.id,
+      lead_id: input.leadId,
+      message_sid: input.messageSid || null,
+      provider_message_id: input.providerMessageId || null,
+      direction: "outbound",
+      body: input.body || "",
+      preview: input.preview,
+      message_type: input.messageType || "text",
+      media_count: input.mediaCount || 0,
+      first_media_url: input.firstMediaUrl || null,
+      first_media_content_type: input.firstMediaContentType || null,
+      raw_payload_json: input.rawPayloadJson || null,
+      ai_relevant: 1,
+      sent_by_customer: 0,
+      delivery_status: input.deliveryStatus || "queued",
+      mode: input.mode || "real",
+      idempotency_key: input.idempotencyKey || null,
+      template_id: input.templateId || null,
+      queued_at: input.queuedAt,
+      created_at: input.createdAt
+    });
+    assertNoError(error);
   }
 
   async function updateProviderMessageId(input) {
-    await db.run("UPDATE messages SET provider_message_id = ?, message_sid = COALESCE(message_sid, ?) WHERE id = ?", [
-      input.providerMessageId || null,
-      input.providerMessageId || null,
-      input.id
-    ]);
+    const message = await findById(input.id);
+    if (!message) return;
+    const { error } = await db.from("messages").update({
+      provider_message_id: input.providerMessageId || null,
+      message_sid: message.message_sid || input.providerMessageId || null
+    }).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function updateDeliveryStatusById(input) {
+    const message = await findById(input.id);
+    if (!message) return;
+
     const timestampColumnMap = {
       queued: "queued_at",
       sending: "sending_at",
@@ -100,85 +100,63 @@ function createMessagesRepository(db) {
       received: "created_at"
     };
 
-    const timestampColumn = timestampColumnMap[input.deliveryStatus] || null;
+    const patch = {
+      delivery_status: input.deliveryStatus,
+      failed_reason: input.failedReason || null
+    };
 
-    if (timestampColumn) {
-      await db.run(
-        `
-          UPDATE messages
-          SET delivery_status = ?, failed_reason = ?, ${timestampColumn} = COALESCE(${timestampColumn}, ?)
-          WHERE id = ?
-        `,
-        [input.deliveryStatus, input.failedReason || null, input.timestamp, input.id]
-      );
-      return;
+    const timestampColumn = timestampColumnMap[input.deliveryStatus] || null;
+    if (timestampColumn && !message[timestampColumn]) {
+      patch[timestampColumn] = input.timestamp;
     }
 
-    await db.run("UPDATE messages SET delivery_status = ?, failed_reason = ? WHERE id = ?", [
-      input.deliveryStatus,
-      input.failedReason || null,
-      input.id
-    ]);
+    const { error } = await db.from("messages").update(patch).eq("id", input.id);
+    assertNoError(error);
   }
 
   async function updateDeliveryStatusByProviderMessageId(input) {
-    const row = await db.get("SELECT id FROM messages WHERE provider_message_id = ? OR message_sid = ? LIMIT 1", [
-      input.providerMessageId,
-      input.providerMessageId
-    ]);
-    if (!row) return null;
+    const { data, error } = await db.from("messages").select("id").or(`provider_message_id.eq.${input.providerMessageId},message_sid.eq.${input.providerMessageId}`).limit(1).maybeSingle();
+    assertNoError(error);
+    if (!data) return null;
 
     await updateDeliveryStatusById({
-      id: row.id,
+      id: data.id,
       deliveryStatus: input.deliveryStatus,
       failedReason: input.failedReason,
       timestamp: input.timestamp
     });
 
-    return row.id;
+    return data.id;
   }
 
   async function listByLeadDescLimit(leadId, limit) {
-    return db.all("SELECT * FROM messages WHERE lead_id = ? ORDER BY datetime(created_at) DESC LIMIT ?", [leadId, limit]);
+    const { data, error } = await db.from("messages").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(limit);
+    assertNoError(error);
+    return data || [];
   }
 
   async function listByLeadDescCursor(leadId, limit, cursorCreatedAt, cursorId) {
-    if (!cursorCreatedAt || !cursorId) {
-      return listByLeadDescLimit(leadId, limit);
-    }
-
-    return db.all(
-      `
-        SELECT *
-        FROM messages
-        WHERE lead_id = ?
-          AND (
-            datetime(created_at) < datetime(?)
-            OR (datetime(created_at) = datetime(?) AND id < ?)
-          )
-        ORDER BY datetime(created_at) DESC, id DESC
-        LIMIT ?
-      `,
-      [leadId, cursorCreatedAt, cursorCreatedAt, cursorId, limit]
-    );
+    if (!cursorCreatedAt || !cursorId) return listByLeadDescLimit(leadId, limit);
+    const { data, error } = await db.from("messages").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(500);
+    assertNoError(error);
+    return (data || []).filter((row) => row.created_at < cursorCreatedAt || (row.created_at === cursorCreatedAt && row.id < cursorId)).slice(0, limit);
   }
 
   async function listByLeadAfterTimestamp(leadId, createdAt) {
-    return db.all(
-      "SELECT id, direction, preview, created_at FROM messages WHERE lead_id = ? AND datetime(created_at) > datetime(?) ORDER BY datetime(created_at) ASC",
-      [leadId, createdAt]
-    );
+    const { data, error } = await db.from("messages").select("id,direction,preview,created_at").eq("lead_id", leadId).gt("created_at", createdAt).order("created_at", { ascending: true });
+    assertNoError(error);
+    return data || [];
   }
 
   async function listRecentForAnalysis(leadId, limit) {
-    return db.all(
-      "SELECT id, direction, preview, created_at FROM messages WHERE lead_id = ? ORDER BY datetime(created_at) DESC LIMIT ?",
-      [leadId, limit]
-    );
+    const { data, error } = await db.from("messages").select("id,direction,preview,created_at").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(limit);
+    assertNoError(error);
+    return data || [];
   }
 
   async function findLatestByLead(leadId) {
-    return db.get("SELECT * FROM messages WHERE lead_id = ? ORDER BY datetime(created_at) DESC LIMIT 1", [leadId]);
+    const rows = await listByLeadDescLimit(leadId, 1);
+    return rows[0] || null;
   }
 
   return {
@@ -199,6 +177,4 @@ function createMessagesRepository(db) {
   };
 }
 
-module.exports = {
-  createMessagesRepository
-};
+module.exports = { createMessagesRepository };
