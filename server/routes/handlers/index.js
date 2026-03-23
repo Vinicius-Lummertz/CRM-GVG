@@ -22,7 +22,7 @@ function createControllers({ crm, v1Service, sseHub, twilioMediaProxy }) {
     conversationsV1Controller: createConversationsV1Controller({ v1Service }),
     templatesV1Controller: createTemplatesV1Controller({ v1Service }),
     eventsV1Controller: createEventsV1Controller({ sseHub }),
-    providerWebhooksV1Controller: createProviderWebhooksV1Controller({ crm, sseHub, v1Service })
+    providerWebhooksV1Controller: createProviderWebhooksV1Controller({ v1Service })
   };
 }
 

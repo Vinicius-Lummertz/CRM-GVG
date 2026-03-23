@@ -1,6 +1,6 @@
 "use strict";
 
-const { encodeCursor, decodeCursor } = require("../../domain/cursor");
+const { encodeCursor, decodeCursor } = require("../domain/cursor");
 
 function normalizeTemplateRow(row) {
   let variables = [];
@@ -25,7 +25,7 @@ function normalizeTemplateRow(row) {
   };
 }
 
-function createTemplatesService({ repositories, generateId, nowIso, conversationsService, sseHub }) {
+function createTemplatesCore({ repositories, generateId, nowIso, conversationsCore, sseHub }) {
   async function listTemplates(input) {
     const cursor = decodeCursor(input.cursor);
     const limit = Math.max(1, Math.min(100, Number(input.limit || 20)));
@@ -124,7 +124,7 @@ function createTemplatesService({ repositories, generateId, nowIso, conversation
   }
 
   async function sendTemplate(input) {
-    return conversationsService.sendMessage({
+    return conversationsCore.sendMessage({
       conversationId: input.conversationId,
       type: "template",
       templateId: input.templateId,
@@ -144,5 +144,5 @@ function createTemplatesService({ repositories, generateId, nowIso, conversation
 }
 
 module.exports = {
-  createTemplatesService
+  createTemplatesCore
 };

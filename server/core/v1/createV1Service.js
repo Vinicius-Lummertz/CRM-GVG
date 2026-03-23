@@ -1,11 +1,12 @@
 "use strict";
 
-const { createRepositories } = require("../../repositories");
-const { generateId } = require("../../domain/id");
-const { nowIso } = require("../../domain/time");
+const { createRepositories } = require("../repositories");
+const { generateId } = require("../domain/id");
+const { nowIso } = require("../domain/time");
 const { createAuthService } = require("./authService");
 const { createConversationsService } = require("./conversationsService");
 const { createTemplatesService } = require("./templatesService");
+const { createProviderWebhooksService } = require("./providerWebhooksService");
 
 function createV1Service({ db, crm, sseHub, whatsappProvider, config }) {
   const repositories = createRepositories(db);
@@ -31,14 +32,21 @@ function createV1Service({ db, crm, sseHub, whatsappProvider, config }) {
     repositories,
     generateId,
     nowIso,
-    conversationsService,
+    conversationsCore: conversationsService,
     sseHub
+  });
+
+  const providerWebhooksService = createProviderWebhooksService({
+    crm,
+    sseHub,
+    conversationsCore: conversationsService
   });
 
   return {
     auth: authService,
     conversations: conversationsService,
-    templates: templatesService
+    templates: templatesService,
+    providerWebhooks: providerWebhooksService
   };
 }
 

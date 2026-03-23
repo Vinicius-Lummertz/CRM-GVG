@@ -1,8 +1,8 @@
 "use strict";
 
-const { STATUS_VALUES } = require("../../domain/classificationConstants");
-const { encodeCursor, decodeCursor } = require("../../domain/cursor");
-const { getPipelinePosition } = require("../../domain/pipelineRules");
+const { STATUS_VALUES } = require("../domain/classificationConstants");
+const { encodeCursor, decodeCursor } = require("../domain/cursor");
+const { getPipelinePosition } = require("../domain/pipelineRules");
 
 const STATUS_SET = new Set(STATUS_VALUES);
 
@@ -70,7 +70,7 @@ function mapProviderStatus(rawStatus) {
   return "sent";
 }
 
-function createConversationsService({ repositories, generateId, nowIso, whatsappProvider, crm, sseHub }) {
+function createConversationsCore({ repositories, generateId, nowIso, whatsappProvider, crm, sseHub }) {
   async function ensureConversationExistsByLead(lead) {
     return repositories.conversations.ensureForLead({
       id: generateId("convbox"),
@@ -566,5 +566,5 @@ function createConversationsService({ repositories, generateId, nowIso, whatsapp
 }
 
 module.exports = {
-  createConversationsService
+  createConversationsCore
 };

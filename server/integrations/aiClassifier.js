@@ -7,7 +7,7 @@ const {
   SENTIMENT_VALUES,
   INTEREST_LEVEL_VALUES,
   RISK_LEVEL_VALUES
-} = require("../domain/classificationConstants");
+} = require("../core/domain/classificationConstants");
 
 const CLASSIFICATION_JSON_SCHEMA = {
   name: "crm_pipeline_classification",

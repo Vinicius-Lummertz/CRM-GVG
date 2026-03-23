@@ -1,12 +1,12 @@
 "use strict";
 
-const { sha256, verifySha256Hash, randomCode, randomToken, toIsoAfterMinutes, isExpired } = require("../../domain/security");
+const { sha256, verifySha256Hash, randomCode, randomToken, toIsoAfterMinutes, isExpired } = require("../domain/security");
 
 function normalizePhone(phone) {
   return String(phone || "").replace(/\s+/g, "").trim();
 }
 
-function createAuthService({ repositories, generateId, nowIso, authConfig, whatsappProvider }) {
+function createAuthCore({ repositories, generateId, nowIso, authConfig, whatsappProvider }) {
   async function requestOtp({ phoneE164 }) {
     const phone = normalizePhone(phoneE164);
     if (!phone) {
@@ -255,5 +255,5 @@ function createAuthService({ repositories, generateId, nowIso, authConfig, whats
 }
 
 module.exports = {
-  createAuthService
+  createAuthCore
 };
