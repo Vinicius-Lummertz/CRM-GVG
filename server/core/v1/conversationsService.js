@@ -1,6 +1,6 @@
 "use strict";
 
-const { createConversationsCore } = require("../../core/conversations/core");
+const { createConversationsCore } = require("../conversations/core");
 
 function createConversationsService(deps) {
   return createConversationsCore(deps);

@@ -1,8 +1,8 @@
 "use strict";
 
-const { STATUS_VALUES } = require("../../domain/classificationConstants");
-const { encodeCursor, decodeCursor } = require("../../domain/cursor");
-const { getPipelinePosition } = require("../../domain/pipelineRules");
+const { STATUS_VALUES } = require("../domain/classificationConstants");
+const { encodeCursor, decodeCursor } = require("../domain/cursor");
+const { getPipelinePosition } = require("../domain/pipelineRules");
 
 const STATUS_SET = new Set(STATUS_VALUES);
 

@@ -1,26 +1,26 @@
 "use strict";
 
-const { createRepositories } = require("../../repositories");
+const { createRepositories } = require("../repositories");
 const {
   STATUS_VALUES,
   EVENT_TYPE_VALUES,
   TEMPERATURE_VALUES
-} = require("../../domain/classificationConstants");
+} = require("../domain/classificationConstants");
 const {
   detectStrongTrigger,
   computeTemperatureFromScore,
   computePriorityScore,
   getPipelinePosition
-} = require("../../domain/pipelineRules");
+} = require("../domain/pipelineRules");
 const {
   extractIncomingMedia,
   buildMessagePreview,
   extractLeadIdentity,
   inferMessageType
-} = require("../../domain/messageParsing");
-const { mapLeadView } = require("../../domain/leadViewMapper");
-const { generateId } = require("../../domain/id");
-const { nowIso } = require("../../domain/time");
+} = require("../domain/messageParsing");
+const { mapLeadView } = require("../domain/leadViewMapper");
+const { generateId } = require("../domain/id");
+const { nowIso } = require("../domain/time");
 const { classifyConversationWithOpenAI } = require("../../integrations/aiClassifier");
 const { createEnsureConversationState } = require("./state");
 const { createLeadQueryUseCases } = require("./queries");

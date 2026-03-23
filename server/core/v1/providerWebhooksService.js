@@ -1,6 +1,6 @@
 "use strict";
 
-const { createProviderWebhooksCore } = require("../../core/providerWebhooks/core");
+const { createProviderWebhooksCore } = require("../providerWebhooks/core");
 
 function createProviderWebhooksService(deps) {
   return createProviderWebhooksCore(deps);

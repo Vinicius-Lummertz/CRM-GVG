@@ -1,6 +1,6 @@
 "use strict";
 
-const { createTemplatesCore } = require("../../core/templates/core");
+const { createTemplatesCore } = require("../templates/core");
 
 function createTemplatesService(deps) {
   return createTemplatesCore(deps);

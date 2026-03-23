@@ -1,6 +1,6 @@
 "use strict";
 
-const { sha256, verifySha256Hash, randomCode, randomToken, toIsoAfterMinutes, isExpired } = require("../../domain/security");
+const { sha256, verifySha256Hash, randomCode, randomToken, toIsoAfterMinutes, isExpired } = require("../domain/security");
 
 function normalizePhone(phone) {
   return String(phone || "").replace(/\s+/g, "").trim();

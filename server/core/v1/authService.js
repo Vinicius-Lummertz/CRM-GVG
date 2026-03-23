@@ -1,6 +1,6 @@
 "use strict";
 
-const { createAuthCore } = require("../../core/auth/core");
+const { createAuthCore } = require("../auth/core");
 
 function createAuthService(deps) {
   return createAuthCore(deps);

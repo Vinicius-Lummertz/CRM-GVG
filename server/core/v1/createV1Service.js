@@ -1,8 +1,8 @@
 "use strict";
 
-const { createRepositories } = require("../../repositories");
-const { generateId } = require("../../domain/id");
-const { nowIso } = require("../../domain/time");
+const { createRepositories } = require("../repositories");
+const { generateId } = require("../domain/id");
+const { nowIso } = require("../domain/time");
 const { createAuthService } = require("./authService");
 const { createConversationsService } = require("./conversationsService");
 const { createTemplatesService } = require("./templatesService");

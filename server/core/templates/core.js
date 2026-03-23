@@ -1,6 +1,6 @@
 "use strict";
 
-const { encodeCursor, decodeCursor } = require("../../domain/cursor");
+const { encodeCursor, decodeCursor } = require("../domain/cursor");
 
 function normalizeTemplateRow(row) {
   let variables = [];

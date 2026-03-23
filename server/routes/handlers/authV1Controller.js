@@ -1,6 +1,6 @@
 "use strict";
 
-const { extractBearerToken } = require("../http/authMiddleware");
+const { extractBearerToken } = require("../middleware/auth");
 
 function createAuthV1Controller({ v1Service }) {
   return {
