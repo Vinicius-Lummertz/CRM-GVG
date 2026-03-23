@@ -1,9 +1,12 @@
 "use strict";
 
-function registerEventsV1Routes(app, { eventsV1Controller }, { requireAuth }) {
-  app.get("/api/v1/events", requireAuth, eventsV1Controller.streamEvents);
+const { registerEventsRoutesV1 } = require("./events");
+
+function registerEventsV1Routes(app, controllers, middlewares) {
+  registerEventsRoutesV1(app, controllers, middlewares);
 }
 
 module.exports = {
-  registerEventsV1Routes
+  registerEventsV1Routes,
+  registerEventsRoutesV1
 };

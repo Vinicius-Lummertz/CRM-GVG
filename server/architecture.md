@@ -82,6 +82,37 @@ Fluxo principal:
 - Infra de eventos em tempo real.
 - `sseHub.js`: conexao/broadcast/heartbeat para Server-Sent Events.
 
+
+## Simplificacao (faseada por categoria)
+A reorganizacao esta sendo aplicada por categoria para evitar quebra geral de fluxo.
+
+Categorias migradas:
+1. **Auth v1**
+   - Rotas consolidadas em `routes/auth.js` (mantendo compatibilidade com `routes/authV1Routes.js`).
+   - Regra de negocio concentrada em `core/auth/core.js`.
+   - `use-cases/v1/authService.js` virou facade de compatibilidade para o novo core.
+2. **Conversations v1**
+   - Rotas consolidadas em `routes/conversations.js` (mantendo compatibilidade com `routes/conversationsV1Routes.js`).
+   - Regra de negocio concentrada em `core/conversations/core.js`.
+   - `use-cases/v1/conversationsService.js` virou facade de compatibilidade para o novo core.
+3. **Templates v1**
+   - Rotas consolidadas em `routes/templates.js` (mantendo compatibilidade com `routes/templatesV1Routes.js`).
+   - Regra de negocio concentrada em `core/templates/core.js`.
+   - `use-cases/v1/templatesService.js` virou facade de compatibilidade para o novo core.
+4. **Events/Provider Webhooks v1**
+   - Rotas consolidadas em `routes/events.js` e `routes/providerWebhooks.js`.
+   - `routes/eventsV1Routes.js` e `routes/providerWebhooksV1Routes.js` mantidos como wrappers de compatibilidade.
+   - Processamento de webhooks movido para `core/providerWebhooks/core.js`.
+
+Proximas categorias sugeridas:
+1. Consolidar controladores por categoria (`controllers/v1/*`) mantendo os nomes atuais como wrappers.
+2. Mover repositorios por dominio para subpastas (`repositories/auth`, `repositories/conversations`, `repositories/templates`).
+
+Objetivo da simplificacao:
+- Reduzir salto entre arquivos para encontrar fluxo de GET/POST.
+- Manter rotas finas e previsiveis para o front-end.
+- Concentrar regra de negocio por dominio em `core/`.
+
 ## Entry Points
 - `server.js`: orquestrador minimo.
 - `server/index.js`: exporta `loadConfig` e `startServer`.
