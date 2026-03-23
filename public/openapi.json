@@ -12,274 +12,720 @@
     }
   ],
   "tags": [
-    { "name": "Health" },
-    { "name": "Auth V1" },
-    { "name": "Conversations V1" },
-    { "name": "Templates V1" },
-    { "name": "Events" },
-    { "name": "Webhooks" },
-    { "name": "Legacy" }
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Auth V1"
+    },
+    {
+      "name": "Conversations V1"
+    },
+    {
+      "name": "Templates V1"
+    },
+    {
+      "name": "Events"
+    },
+    {
+      "name": "Webhooks"
+    },
+    {
+      "name": "Legacy"
+    }
   ],
   "paths": {
     "/health": {
       "get": {
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Health check"
       }
     },
     "/api/v1/auth/otp/request": {
       "post": {
-        "tags": ["Auth V1"],
-        "summary": "Solicita OTP"
+        "tags": [
+          "Auth V1"
+        ],
+        "summary": "Solicita OTP",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthOtpRequestBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/auth/otp/verify": {
       "post": {
-        "tags": ["Auth V1"],
-        "summary": "Valida OTP"
+        "tags": [
+          "Auth V1"
+        ],
+        "summary": "Valida OTP",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthOtpVerifyBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "tags": ["Auth V1"],
-        "summary": "Renova token"
+        "tags": [
+          "Auth V1"
+        ],
+        "summary": "Renova token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/auth/logout": {
       "post": {
-        "tags": ["Auth V1"],
+        "tags": [
+          "Auth V1"
+        ],
         "summary": "Logout",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/auth/me": {
       "get": {
-        "tags": ["Auth V1"],
+        "tags": [
+          "Auth V1"
+        ],
         "summary": "Usuário atual",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/conversations": {
       "get": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Lista conversas",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "temperature",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "owner_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attention_required",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/v1/conversations/{conversationId}": {
       "get": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Busca conversa",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "conversationId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ]
       }
     },
     "/api/v1/conversations/{conversationId}/messages": {
       "get": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Lista mensagens da conversa",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "conversationId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         ]
       },
       "post": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Envia mensagem",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "conversationId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendConversationMessageBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/conversations/{conversationId}/status": {
       "patch": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Atualiza status da conversa",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "conversationId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConversationStatusBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/conversations/{conversationId}/owner": {
       "patch": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Atualiza owner da conversa",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "conversationId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateConversationOwnerBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/conversations/{conversationId}/insights": {
       "get": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Retorna insights da conversa",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "conversationId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ]
       }
     },
     "/api/v1/messages/{messageId}": {
       "get": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Busca mensagem por id",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "messageId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ]
       }
     },
     "/api/v1/operators": {
       "get": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Lista operadores",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/dashboard/metrics": {
       "get": {
-        "tags": ["Conversations V1"],
+        "tags": [
+          "Conversations V1"
+        ],
         "summary": "Métricas do dashboard",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "owner_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
       }
     },
     "/api/v1/templates": {
       "get": {
-        "tags": ["Templates V1"],
+        "tags": [
+          "Templates V1"
+        ],
         "summary": "Lista templates",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
       },
       "post": {
-        "tags": ["Templates V1"],
+        "tags": [
+          "Templates V1"
+        ],
         "summary": "Cria template",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/templates/{templateId}": {
       "patch": {
-        "tags": ["Templates V1"],
+        "tags": [
+          "Templates V1"
+        ],
         "summary": "Atualiza template",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "templateId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/templates/{templateId}/send": {
       "post": {
-        "tags": ["Templates V1"],
+        "tags": [
+          "Templates V1"
+        ],
         "summary": "Dispara template",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "name": "templateId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendTemplateBody"
+              }
+            }
+          }
+        }
       }
     },
     "/api/events": {
       "get": {
-        "tags": ["Events"],
+        "tags": [
+          "Events"
+        ],
         "summary": "SSE legado"
       }
     },
     "/api/v1/events": {
       "get": {
-        "tags": ["Events"],
+        "tags": [
+          "Events"
+        ],
         "summary": "SSE v1",
-        "security": [{ "bearerAuth": [] }]
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/whatsapp/webhook": {
       "post": {
-        "tags": ["Webhooks"],
-        "summary": "Webhook legado de entrada"
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Webhook legado de entrada",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/providers/whatsapp/webhooks/inbound": {
       "post": {
-        "tags": ["Webhooks"],
-        "summary": "Webhook v1 inbound"
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Webhook v1 inbound",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/providers/whatsapp/webhooks/status": {
       "post": {
-        "tags": ["Webhooks"],
-        "summary": "Webhook v1 status"
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Webhook v1 status",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
       }
     },
     "/api/leads": {
       "get": {
-        "tags": ["Legacy"],
-        "summary": "Lista leads (legado)"
+        "tags": [
+          "Legacy"
+        ],
+        "summary": "Lista leads (legado)",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "temperature",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attention_required",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
       }
     },
     "/api/leads/{leadId}/messages": {
       "get": {
-        "tags": ["Legacy"],
+        "tags": [
+          "Legacy"
+        ],
         "summary": "Mensagens do lead (legado)",
         "parameters": [
           {
             "name": "leadId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         ]
       }
     },
     "/api/media-proxy": {
       "get": {
-        "tags": ["Legacy"],
-        "summary": "Proxy de mídia"
+        "tags": [
+          "Legacy"
+        ],
+        "summary": "Proxy de mídia",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        ]
       }
     }
   },
@@ -289,6 +735,174 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "AuthOtpRequestBody": {
+        "type": "object",
+        "required": [
+          "phone_e164"
+        ],
+        "properties": {
+          "phone_e164": {
+            "type": "string",
+            "example": "+5511999999999"
+          }
+        }
+      },
+      "AuthOtpVerifyBody": {
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "code"
+        ],
+        "properties": {
+          "challenge_id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthRefreshBody": {
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "SendConversationMessageBody": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "default": "text"
+          },
+          "body": {},
+          "template_id": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "mode": {
+            "type": "string",
+            "default": "real"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateConversationStatusBody": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateConversationOwnerBody": {
+        "type": "object",
+        "properties": {
+          "owner_id": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CreateTemplateBody": {
+        "type": "object",
+        "required": [
+          "name",
+          "body"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateTemplateBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SendTemplateBody": {
+        "type": "object",
+        "required": [
+          "conversation_id"
+        ],
+        "properties": {
+          "conversation_id": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "mode": {
+            "type": "string",
+            "default": "real"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
+        }
       }
     }
   }
