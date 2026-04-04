@@ -1,23 +1,84 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Smartphone, Check } from 'lucide-react';
-import { MOCK_VERIFICATION_CODE } from '../data/mockData';
+import { Check } from 'lucide-react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://crm-gvg-production.up.railway.app';
 
 export default function Login() {
   const [phone, setPhone] = useState('');
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handlePhoneSubmit = (e: React.FormEvent) => {
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.length >= 10) {
-      setStep('code');
-      setError('');
-    } else {
+    setError('');
+
+    const trimmedPhone = phone.trim();
+    if (trimmedPhone.length < 10) {
       setError('Por favor, insira um número válido');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v2/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: trimmedPhone })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data?.error || 'Falha ao enviar código');
+        return;
+      }
+
+      setStep('code');
+      setCode(['', '', '', '', '', '']);
+    } catch (error) {
+      console.error('Erro ao enviar OTP:', error);
+      setError('Erro ao conectar com o servidor. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyCode = async (enteredCode: string) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v2/otp/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.trim(), code: enteredCode })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data?.error || 'Código inválido');
+        setTimeout(() => {
+          setCode(['', '', '', '', '', '']);
+          setError('');
+          document.getElementById('code-0')?.focus();
+        }, 1000);
+        return;
+      }
+
+      localStorage.setItem('authenticated', 'true');
+      router.push('/crm');
+    } catch (error) {
+      console.error('Erro ao verificar OTP:', error);
+      setError('Erro ao verificar o código. Tente novamente.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -28,25 +89,13 @@ export default function Login() {
     newCode[index] = value;
     setCode(newCode);
 
-    // Auto-focus next input
     if (value && index < 5) {
       const nextInput = document.getElementById(`code-${index + 1}`);
       nextInput?.focus();
     }
 
-    // Check if code is complete
-    if (newCode.every(digit => digit !== '') && newCode.join('') === MOCK_VERIFICATION_CODE) {
-      setTimeout(() => {
-        localStorage.setItem('authenticated', 'true');
-        router.push('/crm');
-      }, 500);
-    } else if (newCode.every(digit => digit !== '')) {
-      setError('Código inválido');
-      setTimeout(() => {
-        setCode(['', '', '', '', '', '']);
-        setError('');
-        document.getElementById('code-0')?.focus();
-      }, 1000);
+    if (newCode.every(digit => digit !== '')) {
+      verifyCode(newCode.join(''));
     }
   };
 
@@ -89,9 +138,10 @@ export default function Login() {
 
             <button
               type="submit"
-              className="w-full bg-pink-500 hover:bg-pink-600 text-white py-3 rounded-lg transition-colors"
+              disabled={loading}
+              className="w-full bg-pink-500 hover:bg-pink-600 disabled:cursor-not-allowed disabled:bg-pink-300 text-white py-3 rounded-lg transition-colors"
             >
-              Enviar Código
+              {loading ? 'Enviando...' : 'Enviar Código'}
             </button>
           </form>
         ) : (
@@ -134,7 +184,12 @@ export default function Login() {
             )}
 
             <button
-              onClick={() => setStep('phone')}
+              type="button"
+              onClick={() => {
+                setStep('phone');
+                setCode(['', '', '', '', '', '']);
+                setError('');
+              }}
               className="w-full text-pink-600 hover:text-pink-700 text-sm"
             >
               Alterar número
