@@ -1,0 +1,32 @@
+{
+  "name": "crm-gvg",
+  "version": "1.0.0",
+  "description": "Front & Back: NEXTJS - https://nextjs.org/docs\r Database: Supabase - https://supabase.com/\r Deploy: Vercel - https://vercel.com/\r Whats API: WaSender API - https://wasenderapi.com/api-docs\r Prototipagem: Figma - https://www.figma.com/design/EMMklFAHjd6f3HJlMfvP2f/Sem-t%C3%ADtulo?node-id=0-1&t=WRmU25BdS5x5JSXv-1",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vinicius-Lummertz/CRM-GVG.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Vinicius-Lummertz/CRM-GVG/issues"
+  },
+  "homepage": "https://github.com/Vinicius-Lummertz/CRM-GVG#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "twilio": "^5.13.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
