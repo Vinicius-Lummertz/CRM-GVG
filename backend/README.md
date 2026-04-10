@@ -1,35 +1,42 @@
-# CRM-GVG - Módulo Backend (v2)
+# CRM-GVG - Modulo Backend (v2)
 
-Este diretório contém o motor backend do CRM-GVG. Um sistema para automação de interações via WhatsApp integrando Node.js, Express, Twilio e Supabase.
+Este repositorio contem o backend do CRM-GVG para automacao de interacoes via WhatsApp usando Node.js, Express, Twilio e Supabase.
 
-## 🚀 Tecnologias e Stack
-- **Node.js + Express**: API REST padronizada que serve o CRM e lida com webhooks.
-- **Supabase (PostgreSQL)**: Banco Mestre contendo schemas de `leads`, `messages`, `otp_challenges` e `templates`.
-- **Twilio SDK**: Comunicação e disparos WhatsApp (Content API & Inbound routing).
+## Tecnologias e Stack
+- **Node.js + Express**: API REST padronizada para o CRM e webhooks.
+- **Supabase (PostgreSQL)**: banco principal com `leads`, `messages`, `otp_challenges` e `templates`.
+- **Twilio SDK**: envio e recebimento de mensagens WhatsApp.
 
-## ⚙️ Variáveis de Ambiente (`.env`)
-O arquivo `.env` contido nesta raiz precisa desta estrutura:
+## Variaveis de Ambiente (`backend/.env`)
+O arquivo `.env` na pasta `backend` precisa conter:
 ```env
 TWILIO_ACCOUNT_SID=AC...
 TWILIO_ACCOUNT_AUTH_TOKEN=...
 TWILIO_WHATSAPP_NUMBER=whatsapp:+...
-TWILIO_CONTENT_SID=HX...        # O ID único gerado do "Content Template Builder" do Meta para o processo OTP
+TWILIO_CONTENT_SID=HX...
+TWILIO_SANDBOX_WHATSAPP_NUMBER=whatsapp:+14155238886
+TWILIO_SANDBOX_JOIN_CODE=spring-went
+TWILIO_SANDBOX_CONTENT_SID=HX...
 
 SUPABASE_URL=https://...
 SUPABASE_SECRET_KEY=...
+
+SANDBOX_ENABLED=1
+SANDBOX_API_KEY=...
+SANDBOX_ALLOWED_TO_NUMBERS=+55..., +55...
 ```
 
-## 🗂️ Organização das Rotas (API v2)
-Este repositório está subdividido por contextos em pastas com seus próprios READMEs detalhados (mergulhe para mais informações específicas do código do módulo):
-- **`/messages`** → Gestão mestre do Chat Inbound (Webhook). ([Ver Documentação](./messages/README.md))
-- **`/messages/send`** → Envios Ativos (OTP Auth e Free Chat do CRM). ([Ver Documentação](./messages/send/README.md))
-- **`/messages/verify`** → Regras de segurança e hash de validação (OTP). ([Ver Documentação](./messages/verify/README.md))
-- **`/templates`** → Gestão administrativa dos templates da Meta. ([Ver Documentação](./templates/README.md))
+## Organizacao das Rotas (API v2)
+- **`/messages`**: webhook inbound do WhatsApp. ([Ver documentacao](./backend/messages/README.md))
+- **`/messages/send`**: envios ativos (OTP e texto livre). ([Ver documentacao](./backend/messages/send/README.md))
+- **`/messages/verify`**: validacao e seguranca do OTP. ([Ver documentacao](./backend/messages/verify/README.md))
+- **`/templates`**: cadastro e listagem de templates Meta/Twilio. ([Ver documentacao](./backend/templates/README.md))
+- **`/leads`**: listagem, busca e criacao manual de leads. ([Ver documentacao](./backend/leads/README.md))
+- **`/sandbox`**: endpoints de teste OTP/chat sem persistencia no banco. ([Ver documentacao](./backend/sandbox/README.md))
 
-## 🏃 Como rodar localmente
+## Como rodar localmente
 ```bash
+cd backend
 npm install
 npm run dev
-
-# Mantenha o ngrok atrelado à porta 3000 para captar webhooks do Twilio localmente!
 ```
