@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { MessageSquare, Plus, LogOut, X, Send, ChevronDown } from 'lucide-react';
 import { mockClients, type Client } from '../data/mockData';
 import { STATUS_CONFIG, getAllStatuses, type StatusValue } from '../data/statusConfig';
+import * as api from '../../services/api';
 
 export default function CRM() {
   const router = useRouter();
@@ -15,6 +16,8 @@ export default function CRM() {
   const [newPhone, setNewPhone] = useState('');
   const [newMessage, setNewMessage] = useState('');
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [sendError, setSendError] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const filteredClients = useMemo(() => {
@@ -44,6 +47,8 @@ export default function CRM() {
 
   const handleLogout = () => {
     localStorage.removeItem('authenticated');
+    localStorage.removeItem('token');
+    localStorage.removeItem('userPhone');
     router.push('/');
   };
 
@@ -71,55 +76,68 @@ export default function CRM() {
     setEditingStatusId(null);
   };
 
-  const handleSendNewMessage = () => {
+  const handleSendNewMessage = async () => {
     if (!newPhone || !newMessage) return;
 
-    // Check if client already exists
-    const existingClient = clients.find(c => c.phone === newPhone);
-    
-    if (existingClient) {
-      // Add message to existing client
-      const updatedClients = clients.map(c => {
-        if (c.phone === newPhone) {
-          return {
-            ...c,
-            messages: [
-              ...c.messages,
-              {
-                id: `m${Date.now()}`,
-                text: newMessage,
-                timestamp: new Date(),
-                fromMe: true,
-              },
-            ],
-          };
-        }
-        return c;
-      });
-      setClients(updatedClients);
-    } else {
-      // Create new client
-      const newClient: Client = {
-        id: `${Date.now()}`,
-        name: newPhone, // In real app, would be extracted from WhatsApp API
-        phone: newPhone,
-        photo: 'https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080',
-        status: 1,
-        messages: [
-          {
-            id: `m${Date.now()}`,
-            text: newMessage,
-            timestamp: new Date(),
-            fromMe: true,
-          },
-        ],
-      };
-      setClients([newClient, ...clients]);
-    }
+    setSendingMessage(true);
+    setSendError('');
 
-    setShowNewMessageModal(false);
-    setNewPhone('');
-    setNewMessage('');
+    try {
+      const token = localStorage.getItem('token');
+      const existingClient = clients.find(c => c.phone === newPhone);
+      
+      // Preparar ID para enviar (usar ID existente ou criar novo temporariamente)
+      const clientId = existingClient?.id || `temp_${Date.now()}`;
+      
+      // Tentar enviar mensagem via API
+      await api.sendChatMessage(clientId, newMessage, token);
+      
+      // Criar mensagem local
+      const tempMessage = {
+        id: `m${Date.now()}`,
+        text: newMessage,
+        timestamp: new Date(),
+        fromMe: true,
+      };
+
+      if (existingClient) {
+        // Add message to existing client
+        const updatedClients = clients.map(c => {
+          if (c.phone === newPhone) {
+            return {
+              ...c,
+              messages: [...c.messages, tempMessage],
+            };
+          }
+          return c;
+        });
+        setClients(updatedClients);
+      } else {
+        // Create new client
+        const newClient: Client = {
+          id: clientId,
+          name: newPhone,
+          phone: newPhone,
+          photo: 'https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080',
+          status: 1,
+          messages: [tempMessage],
+        };
+        setClients([newClient, ...clients]);
+      }
+
+      setShowNewMessageModal(false);
+      setNewPhone('');
+      setNewMessage('');
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      setSendError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao enviar mensagem. Tente novamente.'
+      );
+    } finally {
+      setSendingMessage(false);
+    }
   };
 
   return (
@@ -314,12 +332,17 @@ export default function CRM() {
               </div>
               <button
                 onClick={handleSendNewMessage}
-                disabled={!newPhone || !newMessage}
+                disabled={!newPhone || !newMessage || sendingMessage}
                 className="w-full bg-pink-500 hover:bg-pink-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Send className="w-5 h-5" />
-                Enviar Mensagem
+                {sendingMessage ? 'Enviando...' : 'Enviar Mensagem'}
               </button>
+              {sendError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
+                  {sendError}
+                </div>
+              )}
             </div>
           </div>
         </div>

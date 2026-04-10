@@ -72,7 +72,13 @@ export default function Login() {
         return;
       }
 
+      // Salvar token se fornecido pelo backend
+      if (data?.token) {
+        localStorage.setItem('token', data.token);
+      }
+      
       localStorage.setItem('authenticated', 'true');
+      localStorage.setItem('userPhone', phone.trim());
       router.push('/crm');
     } catch (error) {
       console.error('Erro ao verificar OTP:', error);
