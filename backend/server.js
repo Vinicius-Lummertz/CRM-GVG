@@ -10,6 +10,12 @@ const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
 const leadsGet = require('./leads/get');
 const leadsCreate = require('./leads/create');
+const sandboxMiddleware = require('./sandbox/middleware');
+const sandboxSessionPreflight = require('./sandbox/session/preflight');
+const sandboxOtpSend = require('./sandbox/otp/send');
+const sandboxOtpVerify = require('./sandbox/otp/verify');
+const sandboxChatSend = require('./sandbox/chat/send');
+const sandboxTemplateSend = require('./sandbox/templates/send');
 
 const app = express();
 
@@ -34,6 +40,13 @@ app.get('/api/v2/templates', templatesGet);
 
 app.get('/api/v2/leads', leadsGet);
 app.post('/api/v2/leads', leadsCreate);
+
+app.use('/api/sandbox', sandboxMiddleware);
+app.post('/api/sandbox/session/preflight', sandboxSessionPreflight);
+app.post('/api/sandbox/otp/send', sandboxOtpSend);
+app.post('/api/sandbox/otp/verify', sandboxOtpVerify);
+app.post('/api/sandbox/chat/send', sandboxChatSend);
+app.post('/api/sandbox/templates/send', sandboxTemplateSend);
 
 const PORT = process.env.PORT || 3000;
 
