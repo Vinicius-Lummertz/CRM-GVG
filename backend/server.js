@@ -8,6 +8,14 @@ const messagesVerifyOtp = require('./messages/verify/otp');
 const messagesSendFreeText = require('./messages/send/freeText');
 const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
+const leadsGet = require('./leads/get');
+const leadsCreate = require('./leads/create');
+const sandboxMiddleware = require('./sandbox/middleware');
+const sandboxSessionPreflight = require('./sandbox/session/preflight');
+const sandboxOtpSend = require('./sandbox/otp/send');
+const sandboxOtpVerify = require('./sandbox/otp/verify');
+const sandboxChatSend = require('./sandbox/chat/send');
+const sandboxTemplateSend = require('./sandbox/templates/send');
 
 const app = express();
 
@@ -30,7 +38,17 @@ app.post('/api/v2/chat/send', messagesSendFreeText);
 app.post('/api/v2/templates', templatesCreate);
 app.get('/api/v2/templates', templatesGet);
 
-const PORT = process.env.PORT || 5000;
+app.get('/api/v2/leads', leadsGet);
+app.post('/api/v2/leads', leadsCreate);
+
+app.use('/api/sandbox', sandboxMiddleware);
+app.post('/api/sandbox/session/preflight', sandboxSessionPreflight);
+app.post('/api/sandbox/otp/send', sandboxOtpSend);
+app.post('/api/sandbox/otp/verify', sandboxOtpVerify);
+app.post('/api/sandbox/chat/send', sandboxChatSend);
+app.post('/api/sandbox/templates/send', sandboxTemplateSend);
+
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
