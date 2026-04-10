@@ -8,6 +8,8 @@ const messagesVerifyOtp = require('./messages/verify/otp');
 const messagesSendFreeText = require('./messages/send/freeText');
 const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
+const leadsGet = require('./leads/get');
+const leadsCreate = require('./leads/create');
 
 const app = express();
 
@@ -29,6 +31,9 @@ app.post('/api/v2/chat/send', messagesSendFreeText);
 
 app.post('/api/v2/templates', templatesCreate);
 app.get('/api/v2/templates', templatesGet);
+
+app.get('/api/v2/leads', leadsGet);
+app.post('/api/v2/leads', leadsCreate);
 
 const PORT = process.env.PORT || 3000;
 
