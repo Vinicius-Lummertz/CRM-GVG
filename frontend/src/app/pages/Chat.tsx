@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Send, MoreVertical } from 'lucide-react';
 import { mockClients, type Client, type Message } from '../data/mockData';
+import * as api from '../../services/api';
 
 interface ChatPageProps {
   params: {
@@ -17,6 +18,7 @@ export default function Chat({ params }: ChatPageProps) {
   const [client, setClient] = useState<Client | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   useEffect(() => {
     const foundClient = mockClients.find((c) => c.id === clientId);
@@ -36,19 +38,37 @@ export default function Chat({ params }: ChatPageProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !client) return;
 
-    const message: Message = {
-      id: `m${Date.now()}`,
-      text: newMessage,
-      timestamp: new Date(),
-      fromMe: true,
-    };
+    setSendingMessage(true);
 
-    setMessages([...messages, message]);
-    setNewMessage('');
+    try {
+      const token = localStorage.getItem('token');
+
+      const message: Message = {
+        id: `m${Date.now()}`,
+        text: newMessage,
+        timestamp: new Date(),
+        fromMe: true,
+      };
+
+      // Adicionar mensagem localmente de forma otimista
+      setMessages([...messages, message]);
+
+      // Tentar enviar para API
+      await api.sendChatMessage(client.id, newMessage, token);
+
+      setNewMessage('');
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      // Remover a mensagem local se o envio falhar
+      setMessages(messages => messages.slice(0, -1));
+      alert('Erro ao enviar mensagem. Tente novamente.');
+    } finally {
+      setSendingMessage(false);
+    }
   };
 
   const formatMessageTime = (date: Date) => {
@@ -174,7 +194,7 @@ export default function Chat({ params }: ChatPageProps) {
           />
           <button
             type="submit"
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || sendingMessage}
             className="bg-pink-500 hover:bg-pink-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white w-12 h-12 rounded-full flex items-center justify-center transition-colors"
           >
             <Send className="w-5 h-5" />
