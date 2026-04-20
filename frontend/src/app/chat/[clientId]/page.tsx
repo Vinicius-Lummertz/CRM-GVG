@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect } from 'react';
+import { use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Chat from '../../pages/Chat';
 
 interface ChatPageProps {
-  params: {
+  params: Promise<{
     clientId: string;
-  };
+  }>;
 }
 
 export default function ChatPage({ params }: ChatPageProps) {
   const router = useRouter();
+  const { clientId } = use(params);
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('authenticated') === 'true';
@@ -20,5 +21,5 @@ export default function ChatPage({ params }: ChatPageProps) {
     }
   }, [router]);
 
-  return <Chat params={params} />;
+  return <Chat params={{ clientId }} />;
 }
