@@ -23,7 +23,7 @@ const app = express();
 app.use(cors({
     origin: '*', // Permite o front-end acessar de qualquer URL/localhost
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-sandbox-key']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
