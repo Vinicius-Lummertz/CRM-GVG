@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getApiBaseUrl, getSandboxApiBaseUrl } from '../../../_upstream';
 
 type VerifyOtpBody = {
   phone?: string;
@@ -21,8 +22,8 @@ export async function POST(req: NextRequest) {
     }
 
     const upstreamUrl = sandbox
-      ? `${process.env.SANDBOX_API_BASE_URL ?? 'https://crm-gvg.onrender.com'}/api/sandbox/otp/verify`
-      : `${process.env.API_BASE_URL ?? 'https://crm-gvg.onrender.com'}/api/v2/otp/verify`;
+      ? `${getSandboxApiBaseUrl()}/api/sandbox/otp/verify`
+      : `${getApiBaseUrl()}/api/v2/otp/verify`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

@@ -97,6 +97,8 @@ export default function LoginPage() {
 
       if (data.success) {
         localStorage.setItem('auth_phone', fullPhone);
+        localStorage.setItem('authenticated', 'true');
+        localStorage.setItem('auth_sandbox', sandbox ? 'true' : 'false');
         router.push('/leads');
       } else {
         setError(data.error || 'Código inválido');

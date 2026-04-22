@@ -3,11 +3,13 @@ const express = require('express');
 const cors = require('cors');
 
 const messagesGet = require('./messages/get');
+const messagesList = require('./messages/list');
 const messagesSendOtp = require('./messages/send/otp');
 const messagesVerifyOtp = require('./messages/verify/otp');
 const messagesSendFreeText = require('./messages/send/freeText');
 const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
+const templatesSend = require('./templates/send');
 const leadsGet = require('./leads/get');
 const leadsCreate = require('./leads/create');
 const sandboxMiddleware = require('./sandbox/middleware');
@@ -34,9 +36,11 @@ app.post('/api/v2/otp/send', messagesSendOtp);
 app.post('/api/v2/otp/verify', messagesVerifyOtp);
 
 app.post('/api/v2/chat/send', messagesSendFreeText);
+app.get('/api/v2/chat/messages', messagesList);
 
 app.post('/api/v2/templates', templatesCreate);
 app.get('/api/v2/templates', templatesGet);
+app.post('/api/v2/templates/send', templatesSend);
 
 app.get('/api/v2/leads', leadsGet);
 app.post('/api/v2/leads', leadsCreate);

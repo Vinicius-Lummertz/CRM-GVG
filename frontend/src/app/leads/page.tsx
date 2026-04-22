@@ -124,7 +124,7 @@ export default function LeadsPage() {
       } else {
         setAddError(data.error || 'Erro ao adicionar lead');
       }
-    } catch (err: any) {
+    } catch {
       setAddError('Erro de conexão ao adicionar lead');
     } finally {
       setAddLoading(false);
@@ -249,10 +249,21 @@ export default function LeadsPage() {
                 <span className="text-xs text-secondary mt-4">
                   Atualizado: {new Date(lead.updated_at).toLocaleDateString('pt-BR')}
                 </span>
-                <a href={`https://wa.me/${lead.wa_id}`} target="_blank" rel="noopener noreferrer" className="text-success text-sm font-semibold flex items-center gap-1 mt-4" style={{ textDecoration: 'none' }}>
+                <button
+                  type="button"
+                  className="btn-outline mt-4"
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      name: lead.name || '',
+                      phone: lead.phone || '',
+                      wa_id: lead.wa_id || '',
+                    });
+                    router.push(`/chat/${lead.id}?${params.toString()}`);
+                  }}
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                   Conversar
-                </a>
+                </button>
               </div>
             </div>
           ))}

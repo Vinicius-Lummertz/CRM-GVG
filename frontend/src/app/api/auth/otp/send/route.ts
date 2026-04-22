@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getApiBaseUrl, getSandboxApiBaseUrl } from '../../../_upstream';
 
 type SendOtpBody = {
   phone?: string;
@@ -19,8 +20,8 @@ export async function POST(req: NextRequest) {
     }
 
     const upstreamUrl = sandbox
-      ? `${process.env.SANDBOX_API_BASE_URL ?? 'https://crm-gvg.onrender.com'}/api/sandbox/otp/send`
-      : `${process.env.API_BASE_URL ?? 'https://crm-gvg.onrender.com'}/api/v2/otp/send`;
+      ? `${getSandboxApiBaseUrl()}/api/sandbox/otp/send`
+      : `${getApiBaseUrl()}/api/v2/otp/send`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
