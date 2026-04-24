@@ -65,7 +65,7 @@ export default function Chat({ params }: ChatPageProps) {
       console.error('Erro ao enviar mensagem:', error);
       // Remover a mensagem local se o envio falhar
       setMessages(messages => messages.slice(0, -1));
-      alert('Erro ao enviar mensagem. Tente novamente.');
+      console.warn('Erro ao enviar mensagem. Tente novamente.');
     } finally {
       setSendingMessage(false);
     }
