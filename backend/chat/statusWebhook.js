@@ -14,6 +14,25 @@ function normalizeStatus(rawStatus) {
     return status || 'unknown';
 }
 
+function buildStatusUpdate(deliveryStatus, body) {
+    const now = new Date().toISOString();
+    const update = {
+        delivery_status: deliveryStatus,
+        raw_payload_json: JSON.stringify(body || {})
+    };
+
+    if (deliveryStatus === 'queued') update.queued_at = now;
+    if (deliveryStatus === 'sent') update.sent_at = now;
+    if (deliveryStatus === 'delivered') update.delivered_at = now;
+    if (deliveryStatus === 'read') update.read_at = now;
+    if (deliveryStatus === 'failed') {
+        update.failed_at = now;
+        update.failed_reason = body.ErrorMessage || body.ErrorCode || null;
+    }
+
+    return update;
+}
+
 module.exports = async (req, res) => {
     const messageSid = req.body.MessageSid || req.body.SmsSid;
     const rawStatus = req.body.MessageStatus || req.body.SmsStatus;
@@ -32,7 +51,7 @@ module.exports = async (req, res) => {
 
         const { error } = await supabase
             .from('messages')
-            .update({ delivery_status: deliveryStatus })
+            .update(buildStatusUpdate(deliveryStatus, req.body))
             .or(`message_sid.eq.${messageSid},provider_message_id.eq.${messageSid}`);
 
         if (error) throw error;

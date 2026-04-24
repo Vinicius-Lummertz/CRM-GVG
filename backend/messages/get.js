@@ -114,7 +114,7 @@ module.exports = async (req, res) => {
             const { data: duplicateMessages, error: duplicateError } = await supabase
                 .from('messages')
                 .select('id, lead_id')
-                .eq('provider_message_id', MessageSid)
+                .or(`provider_message_id.eq.${MessageSid},message_sid.eq.${MessageSid},idempotency_key.eq.${MessageSid}`)
                 .limit(1);
 
             if (duplicateError) throw duplicateError;
@@ -195,6 +195,9 @@ module.exports = async (req, res) => {
                 message_type: 'text',
                 sent_by_customer: 1,
                 delivery_status: 'received',
+                mode: 'real',
+                idempotency_key: providerMessageId,
+                raw_payload_json: JSON.stringify(req.body || {}),
                 created_at: now
             }]);
 

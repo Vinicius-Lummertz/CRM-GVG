@@ -142,6 +142,18 @@ module.exports = async (req, res) => {
                 message_type: 'template',
                 sent_by_customer: 0,
                 delivery_status: 'sent',
+                mode: 'real',
+                idempotency_key: message.sid,
+                template_id: template.id,
+                sent_at: now,
+                raw_payload_json: JSON.stringify({
+                    provider: 'twilio',
+                    sid: message.sid,
+                    contentSid: template.content_sid,
+                    contentVariables: parsedVariables,
+                    from: process.env.TWILIO_WHATSAPP_NUMBER,
+                    to: normalizedPhone.whatsapp
+                }),
                 created_at: now
             }]);
 
@@ -160,8 +172,10 @@ module.exports = async (req, res) => {
                 last_message: renderedBody,
                 last_message_preview: getPreview(renderedBody),
                 last_message_at: now,
+                last_outbound_at: now,
                 updated_at: now,
-                message_count_total: Number(lead.message_count_total || 0) + 1
+                message_count_total: Number(lead.message_count_total || 0) + 1,
+                outbound_count: Number(lead.outbound_count || 0) + 1
             })
             .eq('id', lead_id);
 
