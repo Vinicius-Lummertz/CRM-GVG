@@ -14,7 +14,7 @@ function normalizeBase(rawValue: string | undefined, fallback: string) {
   const value = rawValue?.toString().trim();
   if (!value) return fallback;
   if (!value.startsWith('http://') && !value.startsWith('https://')) return fallback;
-  if (looksLikeLocalhost(value)) return fallback;
+  if (looksLikeLocalhost(value) && process.env.NODE_ENV === 'production') return fallback;
   return value.replace(/\/+$/, '');
 }
 

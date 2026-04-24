@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface ConversationWindow {
+  is_open: boolean;
+  expires_at: string | null;
+  remaining_seconds: number;
+}
+
 interface Lead {
   id: string;
   name: string;
@@ -10,6 +16,18 @@ interface Lead {
   external_key: string;
   wa_id: string;
   updated_at: string;
+  last_message_preview?: string;
+  last_message_at?: string;
+  unread_count?: number;
+  conversation_window?: ConversationWindow;
+}
+
+function formatWindowLabel(lead: Lead) {
+  if (!lead.conversation_window?.is_open) return 'Janela fechada';
+
+  const hours = Math.floor((lead.conversation_window.remaining_seconds || 0) / 3600);
+  if (hours <= 0) return 'Janela aberta';
+  return `${hours}h restantes`;
 }
 
 export default function LeadsPage() {
@@ -34,8 +52,8 @@ export default function LeadsPage() {
     setError('');
 
     try {
-      const url = `https://crm-gvg.onrender.com/api/v2/leads${query ? `?search=${encodeURIComponent(query)}&by=auto` : ''}`;
-      const res = await fetch(url);
+      const url = `/api/v2/leads${query ? `?search=${encodeURIComponent(query)}&by=auto` : ''}`;
+      const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json();
 
       if (data.success) {
@@ -44,7 +62,7 @@ export default function LeadsPage() {
         setError(data.error || 'Erro ao carregar leads');
       }
     } catch {
-      setError('Erro de conexão com a API de Leads');
+      setError('Erro de conexao com a API de Leads');
     } finally {
       setLoading(false);
     }
@@ -69,44 +87,44 @@ export default function LeadsPage() {
   };
 
   const handleDddChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let v = e.target.value.replace(/\D/g, '').replace(/^0+/, '');
-    if (v.length > 3) v = v.slice(0, 3);
-    setNewDdd(v);
+    let value = e.target.value.replace(/\D/g, '').replace(/^0+/, '');
+    if (value.length > 3) value = value.slice(0, 3);
+    setNewDdd(value);
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let v = e.target.value.replace(/\D/g, '');
-    if (v.length > 9) v = v.slice(0, 9);
-    
-    if (v.length > 5) {
-      v = v.replace(/^(\d{5})(\d{1,4})/, '$1-$2');
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 9) value = value.slice(0, 9);
+
+    if (value.length > 5) {
+      value = value.replace(/^(\d{5})(\d{1,4})/, '$1-$2');
     }
-    setNewPhone(v);
+    setNewPhone(value);
   };
 
   const handleAddLead = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddError('');
     const cleanPhone = newPhone.replace(/\D/g, '');
-    
+
     if (!newName.trim()) {
-        setAddError('O nome é obrigatório.');
-        return;
+      setAddError('O nome e obrigatorio.');
+      return;
     }
     if (!newDdd || newDdd.length < 2) {
-        setAddError('DDD inválido.');
-        return;
+      setAddError('DDD invalido.');
+      return;
     }
     if (!cleanPhone || cleanPhone.length < 8) {
-        setAddError('Número inválido.');
-        return;
+      setAddError('Numero invalido.');
+      return;
     }
 
     setAddLoading(true);
 
     const fullPhone = `55${newDdd}${cleanPhone}`;
     try {
-      const res = await fetch('https://crm-gvg.onrender.com/api/v2/leads', {
+      const res = await fetch('/api/v2/leads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -120,12 +138,12 @@ export default function LeadsPage() {
         setNewName('');
         setNewDdd('');
         setNewPhone('');
-        fetchLeads(); // refresh the list
+        fetchLeads();
       } else {
         setAddError(data.error || 'Erro ao adicionar lead');
       }
     } catch {
-      setAddError('Erro de conexão ao adicionar lead');
+      setAddError('Erro de conexao ao adicionar lead');
     } finally {
       setAddLoading(false);
     }
@@ -151,64 +169,64 @@ export default function LeadsPage() {
       </div>
 
       {showAdd && (
-          <div className="card p-6 mb-8 animate-fade-in border-danger" style={{ borderColor: 'var(--accent-primary)' }}>
-              <h3 className="text-lg font-semibold mb-4 text-primary">Novo Lead</h3>
-              {addError && <div className="bg-danger-light text-danger p-3 rounded-lg mb-4 text-sm">{addError}</div>}
-              <form onSubmit={handleAddLead} className="flex flex-col gap-4">
-                  <div>
-                      <label className="text-sm text-secondary mb-2 block">Nome</label>
-                      <input 
-                        type="text" 
-                        className="input-field" 
-                        placeholder="Nome do contato" 
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        disabled={addLoading}
-                      />
-                  </div>
-                  <div>
-                      <label className="text-sm text-secondary mb-2 block">Telefone (WhatsApp)</label>
-                      <div className="flex gap-2 items-stretch">
-                        <div className="input-addon">
-                            <span className="font-semibold text-base">+55</span>
-                        </div>
-                        <input 
-                            type="text"
-                            placeholder="DDD"
-                            value={newDdd}
-                            onChange={handleDddChange}
-                            className="input-field text-center px-2 min-w-0"
-                            style={{ width: '80px' }}
-                            disabled={addLoading}
-                        />
-                        <input 
-                            type="text" 
-                            className="input-field flex-1 min-w-0" 
-                            placeholder="99999-9999" 
-                            value={newPhone}
-                            onChange={handlePhoneChange}
-                            disabled={addLoading}
-                        />
-                      </div>
-                  </div>
-                  <div className="flex gap-3 justify-end mt-2">
-                      <button type="button" className="btn-ghost" onClick={() => setShowAdd(false)} disabled={addLoading}>Cancelar</button>
-                      <button type="submit" className="btn-primary" disabled={addLoading || !newName || newPhone.length < 8 || newDdd.length < 2}>
-                          {addLoading ? <div className="spinner"></div> : 'Salvar'}
-                      </button>
-                  </div>
-              </form>
-          </div>
+        <div className="card p-6 mb-8 animate-fade-in" style={{ borderColor: 'var(--accent-primary)' }}>
+          <h3 className="text-lg font-semibold mb-4 text-primary">Novo Lead</h3>
+          {addError && <div className="bg-danger-light text-danger p-3 rounded-lg mb-4 text-sm">{addError}</div>}
+          <form onSubmit={handleAddLead} className="flex flex-col gap-4">
+            <div>
+              <label className="text-sm text-secondary mb-2 block">Nome</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Nome do contato"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                disabled={addLoading}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-secondary mb-2 block">Telefone (WhatsApp)</label>
+              <div className="flex gap-2 items-stretch">
+                <div className="input-addon">
+                  <span className="font-semibold text-base">+55</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="DDD"
+                  value={newDdd}
+                  onChange={handleDddChange}
+                  className="input-field text-center px-2 min-w-0"
+                  style={{ width: '80px' }}
+                  disabled={addLoading}
+                />
+                <input
+                  type="text"
+                  className="input-field flex-1 min-w-0"
+                  placeholder="99999-9999"
+                  value={newPhone}
+                  onChange={handlePhoneChange}
+                  disabled={addLoading}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-2">
+              <button type="button" className="btn-ghost" onClick={() => setShowAdd(false)} disabled={addLoading}>Cancelar</button>
+              <button type="submit" className="btn-primary" disabled={addLoading || !newName || newPhone.length < 8 || newDdd.length < 2}>
+                {addLoading ? <div className="spinner"></div> : 'Salvar'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6">
-        <h3 className="text-2xl font-semibold text-primary">Meus Leads</h3>
+        <h3 className="text-2xl font-semibold text-primary">Conversas</h3>
 
         <form onSubmit={handleSearch} className="flex gap-3 min-w-xs w-full sm:w-auto">
           <input
             type="text"
             className="input-field text-sm px-4 py-2"
-            placeholder="Buscar por nome ou número..."
+            placeholder="Buscar por nome ou numero..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -234,10 +252,12 @@ export default function LeadsPage() {
           {leads.map((lead) => (
             <div key={lead.id} className="card card-hover p-8">
               <div className="flex justify-between items-start mb-4 gap-3">
-                <div>
+                <div className="min-w-0">
                   <h4 className="text-lg m-0 mb-1 text-primary">{lead.name || 'Sem Nome'}</h4>
                 </div>
-                <span className="badge">Lead</span>
+                <span className={`badge ${lead.conversation_window?.is_open ? '' : 'border-danger'}`}>
+                  {formatWindowLabel(lead)}
+                </span>
               </div>
 
               <div className="flex items-center gap-2 mb-3 text-primary">
@@ -245,9 +265,13 @@ export default function LeadsPage() {
                 <span className="text-base">{lead.phone}</span>
               </div>
 
+              <div className="text-sm text-secondary" style={{ minHeight: '42px' }}>
+                {lead.last_message_preview || 'Sem mensagens ainda.'}
+              </div>
+
               <div className="pt-4 flex justify-between items-center gap-2 mt-4" style={{ borderTop: '1px solid var(--panel-border)' }}>
                 <span className="text-xs text-secondary mt-4">
-                  Atualizado: {new Date(lead.updated_at).toLocaleDateString('pt-BR')}
+                  {lead.unread_count ? `${lead.unread_count} nao lida(s)` : `Atualizado: ${new Date(lead.updated_at).toLocaleDateString('pt-BR')}`}
                 </span>
                 <button
                   type="button"
@@ -257,6 +281,8 @@ export default function LeadsPage() {
                       name: lead.name || '',
                       phone: lead.phone || '',
                       wa_id: lead.wa_id || '',
+                      window_open: lead.conversation_window?.is_open ? '1' : '0',
+                      window_expires_at: lead.conversation_window?.expires_at || '',
                     });
                     router.push(`/chat/${lead.id}?${params.toString()}`);
                   }}
