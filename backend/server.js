@@ -5,7 +5,11 @@ const cors = require('cors');
 const messagesGet = require('./messages/get');
 const messagesSendOtp = require('./messages/send/otp');
 const messagesVerifyOtp = require('./messages/verify/otp');
-const messagesSendFreeText = require('./messages/send/freeText');
+const chatMessages = require('./chat/messages');
+const chatRead = require('./chat/read');
+const chatSendText = require('./chat/sendText');
+const chatSendTemplate = require('./chat/sendTemplate');
+const chatStatusWebhook = require('./chat/statusWebhook');
 const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
 const leadsGet = require('./leads/get');
@@ -33,7 +37,12 @@ app.post('/api/v2/otp/webhook', messagesGet);
 app.post('/api/v2/otp/send', messagesSendOtp);
 app.post('/api/v2/otp/verify', messagesVerifyOtp);
 
-app.post('/api/v2/chat/send', messagesSendFreeText);
+app.get('/api/v2/chat/:leadId/messages', chatMessages);
+app.post('/api/v2/chat/:leadId/read', chatRead);
+app.post('/api/v2/chat/send', chatSendText);
+app.post('/api/v2/chat/send-template', chatSendTemplate);
+app.post('/api/v2/chat/status-webhook', chatStatusWebhook);
+app.post('/api/v2/chat/webhook', messagesGet);
 
 app.post('/api/v2/templates', templatesCreate);
 app.get('/api/v2/templates', templatesGet);

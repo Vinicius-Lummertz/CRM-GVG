@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { buildConversationWindow } = require('../chat/utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 const VALID_SEARCH_MODES = ['auto', 'name', 'number'];
@@ -35,6 +36,14 @@ function buildNumberSearchCandidates(rawSearch) {
     }
 
     return Array.from(candidates).filter((value) => value.length >= 4);
+}
+
+function withConversationWindow(leads) {
+    const now = new Date();
+    return (leads || []).map((lead) => ({
+        ...lead,
+        conversation_window: buildConversationWindow(lead, now)
+    }));
 }
 
 async function fetchLeadsByName(searchTerm) {
@@ -97,7 +106,7 @@ module.exports = async (req, res) => {
             return res.status(200).json({
                 success: true,
                 count: leads ? leads.length : 0,
-                leads: leads || []
+                leads: withConversationWindow(leads)
             });
         }
 
@@ -107,7 +116,7 @@ module.exports = async (req, res) => {
             return res.status(200).json({
                 success: true,
                 count: leads.length,
-                leads
+                leads: withConversationWindow(leads)
             });
         }
 
@@ -123,7 +132,7 @@ module.exports = async (req, res) => {
             return res.status(200).json({
                 success: true,
                 count: leads.length,
-                leads
+                leads: withConversationWindow(leads)
             });
         }
 
@@ -147,7 +156,7 @@ module.exports = async (req, res) => {
         return res.status(200).json({
             success: true,
             count: leads.length,
-            leads
+            leads: withConversationWindow(leads)
         });
     } catch (error) {
         console.error("Erro ao buscar leads:", error);

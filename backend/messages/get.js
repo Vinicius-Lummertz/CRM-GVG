@@ -40,10 +40,10 @@ module.exports = async (req, res) => {
                     last_message_at: now,
                     last_inbound_at: now,
                     updated_at: now,
-                    unread_count: lead.unread_count + 1,
-                    message_count_total: lead.message_count_total + 1,
-                    inbound_count: lead.inbound_count + 1,
-                    messages_after_last_resume: lead.messages_after_last_resume + 1
+                    unread_count: Number(lead.unread_count || 0) + 1,
+                    message_count_total: Number(lead.message_count_total || 0) + 1,
+                    inbound_count: Number(lead.inbound_count || 0) + 1,
+                    messages_after_last_resume: Number(lead.messages_after_last_resume || 0) + 1
                 })
                 .eq('id', leadId);
 
@@ -75,7 +75,8 @@ module.exports = async (req, res) => {
                     updated_at: now,
                     unread_count: 1,
                     message_count_total: 1,
-                    inbound_count: 1
+                    inbound_count: 1,
+                    messages_after_last_resume: 1
                 }]);
 
             if (insertError) throw insertError;
