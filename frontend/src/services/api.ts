@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://crm-gvg-production.up.railway.app';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://crm-gvg.onrender.com';
 
 // Função auxiliar para adicionar token em headers
 const getAuthHeaders = (token: string | null) => {
@@ -68,39 +68,125 @@ export async function getAvailableTemplates(token: string | null = null) {
 }
 
 /**
- * FUTURO: quando GET /api/v2/leads existir
  * Busca lista de leads/clientes
+ * GET /api/v2/leads?search=termo&by=auto|name|number
  */
-export async function getLeads(token: string | null = null) {
-  // Placeholder para quando endpoint existir
-  throw new Error('Endpoint GET /api/v2/leads não implementado no backend ainda');
+export async function getLeads(
+  search: string = '',
+  by: 'auto' | 'name' | 'number' = 'auto',
+  token: string | null = null
+) {
+  try {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (by) params.append('by', by);
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const response = await fetch(`${API_BASE_URL}/api/v2/leads${queryString}`, {
+      method: 'GET',
+      headers: getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Erro ao buscar leads');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Erro em getLeads:', error);
+    throw error;
+  }
 }
 
 /**
- * FUTURO: quando GET /api/v2/messages existir
+ * Cria um novo lead/cliente
+ * POST /api/v2/leads
+ */
+export async function createLead(
+  name: string,
+  phone: string,
+  token: string | null = null
+) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v2/leads`, {
+      method: 'POST',
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({
+        name,
+        phone,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Erro ao criar lead');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Erro em createLead:', error);
+    throw error;
+  }
+}
+
+/**
  * Busca mensagens de um lead
+ * GET /api/v2/messages?lead_id={leadId}
  */
 export async function getMessagesByLeadId(
   leadId: string,
   token: string | null = null
 ) {
-  // Placeholder para quando endpoint existir
-  throw new Error(
-    'Endpoint GET /api/v2/messages não implementado no backend ainda'
-  );
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v2/messages?lead_id=${encodeURIComponent(leadId)}`,
+      {
+        method: 'GET',
+        headers: getAuthHeaders(token),
+      }
+    );
+
+    if (!response.ok) {
+      // Se o endpoint não estiver implementado ou não retornar mensagens,
+      // tratamos como lista vazia para não quebrar a tela de chat.
+      return { success: false, messages: [] };
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Erro em getMessagesByLeadId:', error);
+    return { success: false, messages: [] };
+  }
 }
 
 /**
- * FUTURO: quando PUT /api/v2/leads/{id}/status existir
  * Atualiza status de um lead
+ * PUT /api/v2/leads/{id}/status
  */
 export async function updateLeadStatus(
   leadId: string,
   status: number,
   token: string | null = null
 ) {
-  // Placeholder para quando endpoint existir
-  throw new Error(
-    'Endpoint PUT /api/v2/leads/{id}/status não implementado no backend ainda'
-  );
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/v2/leads/${encodeURIComponent(leadId)}/status`,
+      {
+        method: 'PUT',
+        headers: getAuthHeaders(token),
+        body: JSON.stringify({ status }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Erro ao atualizar status');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Erro em updateLeadStatus:', error);
+    throw error;
+  }
 }

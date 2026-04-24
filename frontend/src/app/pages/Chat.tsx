@@ -1,8 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Send, MoreVertical } from 'lucide-react';
-import { mockClients, type Client, type Message } from '../data/mockData';
 import * as api from '../../services/api';
+
+interface Message {
+  id: string;
+  text: string;
+  timestamp: string;
+  fromMe: boolean;
+}
+
+interface Lead {
+  id: string;
+  name: string;
+  phone: string;
+  photo?: string;
+  last_message?: string;
+}
 
 interface ChatPageProps {
   params: {
@@ -11,23 +25,63 @@ interface ChatPageProps {
 }
 
 export default function Chat({ params }: ChatPageProps) {
-  const { clientId } = params;
+  const { clientId } = React.use(params);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const [client, setClient] = useState<Client | null>(null);
+  const [lead, setLead] = useState<Lead | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // Carregar lead e mensagens ao inicializar
   useEffect(() => {
-    const foundClient = mockClients.find((c) => c.id === clientId);
-    if (foundClient) {
-      setClient(foundClient);
-      setMessages(foundClient.messages);
-    } else {
-      router.push('/crm');
-    }
+    const loadChatData = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        
+        // Buscar lead pelo ID: backend atual pesquisa nome/número, então usa lista completa
+        const leadsResponse = await api.getLeads('', 'auto', token);
+        const foundLead = leadsResponse.leads?.find((l: any) => l.id === clientId);
+        
+        if (foundLead) {
+          setLead({
+            id: foundLead.id,
+            name: foundLead.name || 'Sem nome',
+            phone: foundLead.phone || '',
+            photo: 'https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080',
+          });
+          
+          // Tentar carregar mensagens se o endpoint existir
+          try {
+            const messagesResponse = await api.getMessagesByLeadId(clientId, token);
+            if (messagesResponse.messages) {
+              const formattedMessages = messagesResponse.messages.map((msg: any) => ({
+                id: msg.id,
+                text: msg.body || msg.text,
+                timestamp: msg.created_at || new Date().toISOString(),
+                fromMe: msg.direction === 'outbound' || msg.sent_by_customer === 0,
+              }));
+              setMessages(formattedMessages);
+            }
+          } catch (error) {
+            console.log('Endpoint de mensagens ainda não implementado, exibindo sem histórico');
+            setMessages([]);
+          }
+        } else {
+          router.push('/crm');
+        }
+      } catch (error) {
+        console.error('Erro ao carregar chat:', error);
+        router.push('/crm');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadChatData();
   }, [clientId, router]);
 
   useEffect(() => {
@@ -40,7 +94,7 @@ export default function Chat({ params }: ChatPageProps) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !client) return;
+    if (!newMessage.trim() || !lead) return;
 
     setSendingMessage(true);
 
@@ -50,7 +104,7 @@ export default function Chat({ params }: ChatPageProps) {
       const message: Message = {
         id: `m${Date.now()}`,
         text: newMessage,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         fromMe: true,
       };
 
@@ -58,7 +112,7 @@ export default function Chat({ params }: ChatPageProps) {
       setMessages([...messages, message]);
 
       // Tentar enviar para API
-      await api.sendChatMessage(client.id, newMessage, token);
+      await api.sendChatMessage(lead.id, newMessage, token);
 
       setNewMessage('');
     } catch (error) {
@@ -71,15 +125,15 @@ export default function Chat({ params }: ChatPageProps) {
     }
   };
 
-  const formatMessageTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString('pt-BR', {
+  const formatMessageTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString('pt-BR', {
       hour: '2-digit',
       minute: '2-digit',
     });
   };
 
-  const formatMessageDate = (date: Date) => {
-    const messageDate = new Date(date);
+  const formatMessageDate = (dateString: string) => {
+    const messageDate = new Date(dateString);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -111,10 +165,18 @@ export default function Chat({ params }: ChatPageProps) {
     return groups;
   };
 
-  if (!client) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">Carregando...</div>
+        <div className="text-gray-500">Carregando conversa...</div>
+      </div>
+    );
+  }
+
+  if (!lead) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Cliente não encontrado</div>
       </div>
     );
   }
@@ -132,13 +194,13 @@ export default function Chat({ params }: ChatPageProps) {
           <ArrowLeft className="w-6 h-6 text-gray-700" />
         </button>
         <img
-          src={client.photo}
-          alt={client.name}
+          src={lead.photo}
+          alt={lead.name}
           className="w-10 h-10 rounded-full object-cover"
         />
         <div className="flex-1">
-          <h2 className="text-gray-900">{client.name}</h2>
-          <p className="text-sm text-gray-500">{client.phone}</p>
+          <h2 className="text-gray-900">{lead.name}</h2>
+          <p className="text-sm text-gray-500">{lead.phone}</p>
         </div>
         <button className="hover:bg-gray-100 rounded-lg p-2 transition-colors">
           <MoreVertical className="w-6 h-6 text-gray-700" />
