@@ -10,9 +10,19 @@ interface Lead {
   name: string;
   phone: string;
   photo?: string;
-  status: number;
+  status: StatusValue;
   last_message?: string;
   last_message_at?: string;
+}
+
+function normalizePhoneForApi(rawPhone: string) {
+  const digits = rawPhone.replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.startsWith('55') ? `+${digits}` : `+55${digits}`;
+}
+
+function onlyDigits(rawPhone: string) {
+  return rawPhone.replace(/\D/g, '');
 }
 
 export default function CRM() {
@@ -44,7 +54,7 @@ export default function CRM() {
             name: lead.name || 'Sem nome',
             phone: lead.phone || '',
             photo: `https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080`,
-            status: lead.status || 1,
+            status: (lead.status || 'lead') as StatusValue,
             last_message: lead.last_message_preview || '',
             last_message_at: lead.last_message_at || new Date().toISOString(),
           }));
@@ -68,7 +78,7 @@ export default function CRM() {
           ? client.name.toLowerCase().includes(filterText.toLowerCase())
           : client.phone.includes(filterText);
       
-      const matchesStatus = filterStatus === 'todos' || client.status.toString() === filterStatus;
+      const matchesStatus = filterStatus === 'todos' || client.status === filterStatus;
       
       return matchesText && matchesStatus;
     });
@@ -129,20 +139,28 @@ export default function CRM() {
   };
 
   const handleSendNewMessage = async () => {
-    if (!newPhone || !newMessage) return;
+    const normalizedPhone = normalizePhoneForApi(newPhone);
+    const normalizedMessage = newMessage.trim();
+
+    if (!normalizedPhone || !normalizedMessage) return;
+
+    if (normalizedPhone.length < 13) {
+      setSendError('Informe um numero de WhatsApp valido com DDD.');
+      return;
+    }
 
     setSendingMessage(true);
     setSendError('');
 
     try {
       const token = localStorage.getItem('token');
-      const existingClient = clients.find(c => c.phone === newPhone);
+      const existingClient = clients.find(c => onlyDigits(c.phone) === onlyDigits(normalizedPhone));
       
       let clientId = existingClient?.id;
       
       // Se o cliente não existe, criar um novo
       if (!existingClient) {
-        const createResponse = await api.createLead(newPhone, newPhone, token);
+        const createResponse = await api.createLead(normalizedPhone, normalizedPhone, token);
         if (createResponse.success) {
           clientId = createResponse.leadId;
         } else {
@@ -151,17 +169,17 @@ export default function CRM() {
       }
       
       // Enviar mensagem via API
-      await api.sendChatMessage(clientId, newMessage, token);
+      await api.sendChatMessage(clientId, normalizedMessage, token);
       
       // Se cliente não existia, adicionar à lista
       if (!existingClient && clientId) {
         const newLead: Lead = {
           id: clientId,
-          name: newPhone,
-          phone: newPhone,
+          name: normalizedPhone,
+          phone: normalizedPhone,
           photo: 'https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080',
-          status: 1,
-          last_message: newMessage,
+          status: 'lead',
+          last_message: normalizedMessage,
           last_message_at: new Date().toISOString(),
         };
         setClients([newLead, ...clients]);
@@ -170,7 +188,7 @@ export default function CRM() {
         setClients(prevClients =>
           prevClients.map(c =>
             c.id === existingClient.id
-              ? { ...c, last_message: newMessage, last_message_at: new Date().toISOString() }
+              ? { ...c, last_message: normalizedMessage, last_message_at: new Date().toISOString() }
               : c
           )
         );
@@ -264,7 +282,7 @@ export default function CRM() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredClients.map((client) => {
-                    const statusConfig = STATUS_CONFIG[client.status] || STATUS_CONFIG[1];
+                    const statusConfig = STATUS_CONFIG[client.status] || STATUS_CONFIG.lead;
                     return (
                       <tr key={client.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">

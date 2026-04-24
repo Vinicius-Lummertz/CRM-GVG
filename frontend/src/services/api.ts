@@ -1,4 +1,7 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://crm-gvg.onrender.com';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://crm-gvg.onrender.com';
+const SANDBOX_API_KEY = process.env.NEXT_PUBLIC_SANDBOX_API_KEY ?? '';
+
+export type ApiMode = 'real' | 'sandbox';
 
 // Função auxiliar para adicionar token em headers
 const getAuthHeaders = (token: string | null) => {
@@ -12,6 +15,11 @@ const getAuthHeaders = (token: string | null) => {
 
   return headers;
 };
+
+const getSandboxHeaders = () => ({
+  'Content-Type': 'application/json',
+  'x-sandbox-key': SANDBOX_API_KEY,
+});
 
 /**
  * Envia uma mensagem de chat via API
@@ -42,6 +50,40 @@ export async function sendChatMessage(
     console.error('Erro em sendChatMessage:', error);
     throw error;
   }
+}
+
+export async function sendOtp(phone: string, mode: ApiMode = 'real') {
+  const isSandbox = mode === 'sandbox';
+  const response = await fetch(`${API_BASE_URL}${isSandbox ? '/api/sandbox/otp/send' : '/api/v2/otp/send'}`, {
+    method: 'POST',
+    headers: isSandbox ? getSandboxHeaders() : getAuthHeaders(null),
+    body: JSON.stringify({ phone }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Falha ao enviar codigo');
+  }
+
+  return data;
+}
+
+export async function verifyOtp(phone: string, code: string, mode: ApiMode = 'real') {
+  const isSandbox = mode === 'sandbox';
+  const response = await fetch(`${API_BASE_URL}${isSandbox ? '/api/sandbox/otp/verify' : '/api/v2/otp/verify'}`, {
+    method: 'POST',
+    headers: isSandbox ? getSandboxHeaders() : getAuthHeaders(null),
+    body: JSON.stringify({ phone, code }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || 'Codigo invalido');
+    (error as Error & { attemptsLeft?: number }).attemptsLeft = data.attempts_left;
+    throw error;
+  }
+
+  return data;
 }
 
 /**
@@ -132,7 +174,7 @@ export async function createLead(
 
 /**
  * Busca mensagens de um lead
- * GET /api/v2/messages?lead_id={leadId}
+ * GET /api/v2/chat/{leadId}/messages
  */
 export async function getMessagesByLeadId(
   leadId: string,
@@ -140,7 +182,7 @@ export async function getMessagesByLeadId(
 ) {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/v2/messages?lead_id=${encodeURIComponent(leadId)}`,
+      `${API_BASE_URL}/api/v2/chat/${encodeURIComponent(leadId)}/messages`,
       {
         method: 'GET',
         headers: getAuthHeaders(token),
@@ -166,7 +208,7 @@ export async function getMessagesByLeadId(
  */
 export async function updateLeadStatus(
   leadId: string,
-  status: number,
+  status: string,
   token: string | null = null
 ) {
   try {

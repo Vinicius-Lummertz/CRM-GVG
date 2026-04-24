@@ -22,7 +22,7 @@ export const mockClients: Client[] = [
     name: 'Maria Silva',
     phone: '+55 11 98765-4321',
     photo: 'https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    status: 1,
+    status: 'lead',
     messages: [
       {
         id: 'm1',
@@ -43,7 +43,7 @@ export const mockClients: Client[] = [
     name: 'João Santos',
     phone: '+55 11 99876-5432',
     photo: 'https://images.unsplash.com/photo-1656313826909-1f89d1702a81?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb3Jwb3JhdGUlMjBwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdHxlbnwxfHx8fDE3NzI5NDE4NjN8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    status: 3,
+    status: 'negotiating',
     messages: [
       {
         id: 'm3',
@@ -70,7 +70,7 @@ export const mockClients: Client[] = [
     name: 'Ana Costa',
     phone: '+55 11 97654-3210',
     photo: 'https://images.unsplash.com/photo-1758599543154-76ec1c4257df?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMGV4ZWN1dGl2ZSUyMGhlYWRzaG90fGVufDF8fHx8MTc3MjkwNjQ3Nnww&ixlib=rb-4.1.0&q=80&w=1080',
-    status: 5,
+    status: 'converted',
     messages: [
       {
         id: 'm6',
@@ -91,7 +91,7 @@ export const mockClients: Client[] = [
     name: 'Carlos Oliveira',
     phone: '+55 11 96543-2109',
     photo: 'https://images.unsplash.com/photo-1762341118920-0b65e8d88aa2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB3b21hbiUyMG9mZmljZXxlbnwxfHx8fDE3NzI4ODA4Nzh8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    status: 2,
+    status: 'contacted',
     messages: [
       {
         id: 'm8',
@@ -106,7 +106,7 @@ export const mockClients: Client[] = [
     name: 'Paula Ferreira',
     phone: '+55 11 95432-1098',
     photo: 'https://images.unsplash.com/photo-1524538198441-241ff79d153b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHByb2Zlc3Npb25hbCUyMG1hbnxlbnwxfHx8fDE3NzI5MDk4MTJ8MA&ixlib=rb-4.1.0&q=80&w=1080',
-    status: 4,
+    status: 'proposal_sent',
     messages: [
       {
         id: 'm9',

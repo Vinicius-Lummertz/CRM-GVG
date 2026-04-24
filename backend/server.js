@@ -14,6 +14,7 @@ const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
 const leadsGet = require('./leads/get');
 const leadsCreate = require('./leads/create');
+const leadsUpdateStatus = require('./leads/updateStatus');
 const sandboxMiddleware = require('./sandbox/middleware');
 const sandboxSessionPreflight = require('./sandbox/session/preflight');
 const sandboxOtpSend = require('./sandbox/otp/send');
@@ -49,6 +50,7 @@ app.get('/api/v2/templates', templatesGet);
 
 app.get('/api/v2/leads', leadsGet);
 app.post('/api/v2/leads', leadsCreate);
+app.put('/api/v2/leads/:leadId/status', leadsUpdateStatus);
 
 app.use('/api/sandbox', sandboxMiddleware);
 app.post('/api/sandbox/session/preflight', sandboxSessionPreflight);

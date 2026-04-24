@@ -19,13 +19,10 @@ interface Lead {
 }
 
 interface ChatPageProps {
-  params: {
-    clientId: string;
-  };
+  clientId: string;
 }
 
-export default function Chat({ params }: ChatPageProps) {
-  const { clientId } = React.use(params);
+export default function Chat({ clientId }: ChatPageProps) {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -34,6 +31,7 @@ export default function Chat({ params }: ChatPageProps) {
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Carregar lead e mensagens ao inicializar
   useEffect(() => {
@@ -60,7 +58,7 @@ export default function Chat({ params }: ChatPageProps) {
             if (messagesResponse.messages) {
               const formattedMessages = messagesResponse.messages.map((msg: any) => ({
                 id: msg.id,
-                text: msg.body || msg.text,
+                text: msg.body || msg.preview || msg.text || '',
                 timestamp: msg.created_at || new Date().toISOString(),
                 fromMe: msg.direction === 'outbound' || msg.sent_by_customer === 0,
               }));
@@ -97,6 +95,7 @@ export default function Chat({ params }: ChatPageProps) {
     if (!newMessage.trim() || !lead) return;
 
     setSendingMessage(true);
+    setError('');
 
     try {
       const token = localStorage.getItem('token');
@@ -119,7 +118,7 @@ export default function Chat({ params }: ChatPageProps) {
       console.error('Erro ao enviar mensagem:', error);
       // Remover a mensagem local se o envio falhar
       setMessages(messages => messages.slice(0, -1));
-      console.warn('Erro ao enviar mensagem. Tente novamente.');
+      setError(error instanceof Error ? error.message : 'Erro ao enviar mensagem. Tente novamente.');
     } finally {
       setSendingMessage(false);
     }
@@ -245,6 +244,11 @@ export default function Chat({ params }: ChatPageProps) {
       </div>
 
       {/* Input */}
+      {error && (
+        <div className="bg-red-50 border-t border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
       <form onSubmit={handleSendMessage} className="bg-white border-t border-gray-200 p-4">
         <div className="flex gap-2">
           <input

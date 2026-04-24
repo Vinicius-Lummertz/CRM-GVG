@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Check } from 'lucide-react';
+import * as api from '../../services/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://crm-gvg-production.up.railway.app';
+function normalizePhoneForApi(rawPhone: string) {
+  const digits = rawPhone.replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.startsWith('55') ? `+${digits}` : `+55${digits}`;
+}
 
 export default function Login() {
   const [phone, setPhone] = useState('');
@@ -11,39 +16,48 @@ export default function Login() {
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [apiMode, setApiMode] = useState<api.ApiMode>('real');
+  const [sandboxOtpCode, setSandboxOtpCode] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem('apiMode');
+    if (savedMode === 'real' || savedMode === 'sandbox') {
+      setApiMode(savedMode);
+    }
+  }, []);
+
+  const toggleApiMode = () => {
+    const nextMode = apiMode === 'real' ? 'sandbox' : 'real';
+    setApiMode(nextMode);
+    localStorage.setItem('apiMode', nextMode);
+    setError('');
+    setSandboxOtpCode('');
+    setCode(['', '', '', '', '', '']);
+    setStep('phone');
+  };
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const trimmedPhone = phone.trim();
-    if (trimmedPhone.length < 10) {
-      setError('Por favor, insira um número válido');
+    const normalizedPhone = normalizePhoneForApi(phone);
+    if (normalizedPhone.length < 13) {
+      setError('Informe um numero de WhatsApp valido com DDD.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v2/otp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: trimmedPhone })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data?.error || 'Falha ao enviar código');
-        return;
-      }
-
+      const data = await api.sendOtp(normalizedPhone, apiMode);
+      setSandboxOtpCode(apiMode === 'sandbox' && data?.sandboxOtpCode ? data.sandboxOtpCode : '');
+      setPhone(normalizedPhone);
       setStep('code');
       setCode(['', '', '', '', '', '']);
     } catch (error) {
       console.error('Erro ao enviar OTP:', error);
-      setError('Erro ao conectar com o servidor. Tente novamente.');
+      setError(error instanceof Error ? error.message : 'Erro ao conectar com o servidor. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -54,71 +68,74 @@ export default function Login() {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v2/otp/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), code: enteredCode })
-      });
+      const data = await api.verifyOtp(phone.trim(), enteredCode, apiMode);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data?.error || 'Código inválido');
-        setTimeout(() => {
-          setCode(['', '', '', '', '', '']);
-          setError('');
-          document.getElementById('code-0')?.focus();
-        }, 1000);
-        return;
-      }
-
-      // Salvar token se fornecido pelo backend
       if (data?.token) {
         localStorage.setItem('token', data.token);
       }
-      
+      if (data?.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken);
+      }
+      if (data?.operator) {
+        localStorage.setItem('operator', JSON.stringify(data.operator));
+      }
+
       localStorage.setItem('authenticated', 'true');
       localStorage.setItem('userPhone', phone.trim());
+      localStorage.setItem('apiMode', apiMode);
       router.push('/crm');
     } catch (error) {
       console.error('Erro ao verificar OTP:', error);
-      setError('Erro ao verificar o código. Tente novamente.');
+      setError(error instanceof Error ? error.message : 'Erro ao verificar o codigo. Tente novamente.');
+      setTimeout(() => {
+        setCode(['', '', '', '', '', '']);
+        setError('');
+        document.getElementById('code-0')?.focus();
+      }, 1200);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCodeChange = (index: number, value: string) => {
-    if (value.length > 1) return;
-    
+    if (!/^\d?$/.test(value)) return;
+
     const newCode = [...code];
     newCode[index] = value;
     setCode(newCode);
 
     if (value && index < 5) {
-      const nextInput = document.getElementById(`code-${index + 1}`);
-      nextInput?.focus();
+      document.getElementById(`code-${index + 1}`)?.focus();
     }
 
-    if (newCode.every(digit => digit !== '')) {
+    if (newCode.every((digit) => digit !== '')) {
       verifyCode(newCode.join(''));
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === 'Backspace' && !code[index] && index > 0) {
-      const prevInput = document.getElementById(`code-${index - 1}`);
-      prevInput?.focus();
+      document.getElementById(`code-${index - 1}`)?.focus();
     }
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-white flex items-center justify-center p-4 relative">
+      <button
+        type="button"
+        onClick={toggleApiMode}
+        className="absolute right-4 top-4 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+        aria-pressed={apiMode === 'sandbox'}
+      >
+        <span className={`h-2.5 w-2.5 rounded-full ${apiMode === 'sandbox' ? 'bg-amber-500' : 'bg-green-500'}`} />
+        {apiMode === 'sandbox' ? 'Sandbox' : 'Real'}
+      </button>
+
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <Image src="/logogvg.png" alt="GVG CRM" width={96} height={96} className="h-24 mx-auto mb-6 object-cover" />
           <p className="text-gray-600">
-            {step === 'phone' ? 'Entre com seu número do WhatsApp' : 'Digite o código de verificação'}
+            {step === 'phone' ? 'Entre com seu numero do WhatsApp' : 'Digite o codigo de verificacao'}
           </p>
         </div>
 
@@ -126,7 +143,7 @@ export default function Login() {
           <form onSubmit={handlePhoneSubmit} className="space-y-6">
             <div>
               <label htmlFor="phone" className="block mb-2 text-gray-700">
-                Número de Telefone
+                Numero de Telefone
               </label>
               <input
                 id="phone"
@@ -138,16 +155,14 @@ export default function Login() {
               />
             </div>
 
-            {error && (
-              <div className="text-red-500 text-sm">{error}</div>
-            )}
+            {error && <div className="text-red-500 text-sm">{error}</div>}
 
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-pink-500 hover:bg-pink-600 disabled:cursor-not-allowed disabled:bg-pink-300 text-white py-3 rounded-lg transition-colors"
             >
-              {loading ? 'Enviando...' : 'Enviar Código'}
+              {loading ? 'Enviando...' : 'Enviar Codigo'}
             </button>
           </form>
         ) : (
@@ -156,17 +171,22 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <Check className="w-5 h-5 text-pink-600 mt-0.5" />
                 <div className="text-sm">
-                  <p className="text-pink-800 mb-1">Código enviado!</p>
+                  <p className="text-pink-800 mb-1">Codigo enviado!</p>
                   <p className="text-pink-700">
-                    Enviamos um código de verificação para <strong>{phone}</strong>
+                    Enviamos um codigo de verificacao para <strong>{phone}</strong>
                   </p>
+                  {sandboxOtpCode && (
+                    <p className="mt-2 text-pink-800">
+                      Codigo sandbox: <strong>{sandboxOtpCode}</strong>
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
 
             <div>
               <label className="block mb-3 text-gray-700 text-center">
-                Código de Verificação
+                Codigo de Verificacao
               </label>
               <div className="flex gap-2 justify-center">
                 {code.map((digit, index) => (
@@ -174,6 +194,7 @@ export default function Login() {
                     key={index}
                     id={`code-${index}`}
                     type="text"
+                    inputMode="numeric"
                     maxLength={1}
                     value={digit}
                     onChange={(e) => handleCodeChange(index, e.target.value)}
@@ -185,9 +206,7 @@ export default function Login() {
               </div>
             </div>
 
-            {error && (
-              <div className="text-red-500 text-sm text-center">{error}</div>
-            )}
+            {error && <div className="text-red-500 text-sm text-center">{error}</div>}
 
             <button
               type="button"
@@ -198,7 +217,7 @@ export default function Login() {
               }}
               className="w-full text-pink-600 hover:text-pink-700 text-sm"
             >
-              Alterar número
+              Alterar numero
             </button>
           </div>
         )}
