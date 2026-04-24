@@ -2,13 +2,23 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { MessageSquare, Plus, LogOut, X, Send, ChevronDown } from 'lucide-react';
-import { mockClients, type Client } from '../data/mockData';
 import { STATUS_CONFIG, getAllStatuses, type StatusValue } from '../data/statusConfig';
 import * as api from '../../services/api';
 
+interface Lead {
+  id: string;
+  name: string;
+  phone: string;
+  photo?: string;
+  status: number;
+  last_message?: string;
+  last_message_at?: string;
+}
+
 export default function CRM() {
   const router = useRouter();
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  const [clients, setClients] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<'nome' | 'numero'>('nome');
   const [filterText, setFilterText] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
@@ -19,6 +29,37 @@ export default function CRM() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [sendError, setSendError] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Carregar leads ao inicializar
+  useEffect(() => {
+    const loadLeads = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const response = await api.getLeads('', 'auto', token);
+        
+        if (response.success && response.leads) {
+          const mappedLeads = response.leads.map((lead: any) => ({
+            id: lead.id,
+            name: lead.name || 'Sem nome',
+            phone: lead.phone || '',
+            photo: `https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080`,
+            status: lead.status || 1,
+            last_message: lead.last_message_preview || '',
+            last_message_at: lead.last_message_at || new Date().toISOString(),
+          }));
+          setClients(mappedLeads);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar leads:', error);
+        setClients([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLeads();
+  }, []);
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
@@ -52,9 +93,11 @@ export default function CRM() {
     router.push('/');
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    
     const now = new Date();
-    const messageDate = new Date(date);
+    const messageDate = new Date(dateString);
     const diffTime = Math.abs(now.getTime() - messageDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -67,13 +110,22 @@ export default function CRM() {
     }
   };
 
-  const handleChangeStatus = (clientId: string, newStatus: StatusValue) => {
-    setClients(prevClients =>
-      prevClients.map(client =>
-        client.id === clientId ? { ...client, status: newStatus } : client
-      )
-    );
-    setEditingStatusId(null);
+  const handleChangeStatus = async (clientId: string, newStatus: StatusValue) => {
+    try {
+      const token = localStorage.getItem('token');
+      await api.updateLeadStatus(clientId, newStatus, token);
+      
+      // Atualizar estado local
+      setClients(prevClients =>
+        prevClients.map(client =>
+          client.id === clientId ? { ...client, status: newStatus } : client
+        )
+      );
+      setEditingStatusId(null);
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+      alert('Erro ao atualizar status do cliente');
+    }
   };
 
   const handleSendNewMessage = async () => {
@@ -86,43 +138,42 @@ export default function CRM() {
       const token = localStorage.getItem('token');
       const existingClient = clients.find(c => c.phone === newPhone);
       
-      // Preparar ID para enviar (usar ID existente ou criar novo temporariamente)
-      const clientId = existingClient?.id || `temp_${Date.now()}`;
+      let clientId = existingClient?.id;
       
-      // Tentar enviar mensagem via API
+      // Se o cliente não existe, criar um novo
+      if (!existingClient) {
+        const createResponse = await api.createLead(newPhone, newPhone, token);
+        if (createResponse.success) {
+          clientId = createResponse.leadId;
+        } else {
+          throw new Error(createResponse.error || 'Erro ao criar cliente');
+        }
+      }
+      
+      // Enviar mensagem via API
       await api.sendChatMessage(clientId, newMessage, token);
       
-      // Criar mensagem local
-      const tempMessage = {
-        id: `m${Date.now()}`,
-        text: newMessage,
-        timestamp: new Date(),
-        fromMe: true,
-      };
-
-      if (existingClient) {
-        // Add message to existing client
-        const updatedClients = clients.map(c => {
-          if (c.phone === newPhone) {
-            return {
-              ...c,
-              messages: [...c.messages, tempMessage],
-            };
-          }
-          return c;
-        });
-        setClients(updatedClients);
-      } else {
-        // Create new client
-        const newClient: Client = {
+      // Se cliente não existia, adicionar à lista
+      if (!existingClient && clientId) {
+        const newLead: Lead = {
           id: clientId,
           name: newPhone,
           phone: newPhone,
           photo: 'https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBlcnNvbnxlbnwxfHx8fDE3NzI5MDgzMzh8MA&ixlib=rb-4.1.0&q=80&w=1080',
           status: 1,
-          messages: [tempMessage],
+          last_message: newMessage,
+          last_message_at: new Date().toISOString(),
         };
-        setClients([newClient, ...clients]);
+        setClients([newLead, ...clients]);
+      } else if (existingClient) {
+        // Atualizar cliente existente com nova mensagem
+        setClients(prevClients =>
+          prevClients.map(c =>
+            c.id === existingClient.id
+              ? { ...c, last_message: newMessage, last_message_at: new Date().toISOString() }
+              : c
+          )
+        );
       }
 
       setShowNewMessageModal(false);
@@ -192,96 +243,103 @@ export default function CRM() {
           </div>
         </div>
 
-        {/* Clients Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-sm text-gray-600">Cliente</th>
-                  <th className="px-6 py-3 text-left text-sm text-gray-600">Número</th>
-                  <th className="px-6 py-3 text-left text-sm text-gray-600">Status</th>
-                  <th className="px-6 py-3 text-left text-sm text-gray-600">Última Mensagem</th>
-                  <th className="px-6 py-3 text-center text-sm text-gray-600">Chat</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredClients.map((client) => {
-                  const lastMessage = client.messages[client.messages.length - 1];
-                  const statusConfig = STATUS_CONFIG[client.status];
-                  return (
-                    <tr key={client.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={client.photo}
-                            alt={client.name}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                          <span>{client.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{client.phone}</td>
-                      <td className="px-6 py-4 relative">
-                        <button
-                          onClick={() => setEditingStatusId(editingStatusId === client.id ? null : client.id)}
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs border transition-all hover:shadow-sm ${statusConfig.color}`}
-                        >
-                          {statusConfig.label}
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                        
-                        {editingStatusId === client.id && (
-                          <div
-                            ref={dropdownRef}
-                            className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[200px] py-1"
-                          >
-                            {getAllStatuses().map(status => (
-                              <button
-                                key={status.value}
-                                onClick={() => handleChangeStatus(client.id, status.value)}
-                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                                  client.status === status.value ? 'bg-gray-50' : ''
-                                }`}
-                              >
-                                <span className={`w-3 h-3 rounded-full ${status.color.split(' ')[0].replace('bg-', 'bg-')}`}></span>
-                                {status.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <p className="text-gray-600 text-sm truncate max-w-xs">
-                            {lastMessage.text}
-                          </p>
-                          <span className="text-xs text-gray-400 whitespace-nowrap">
-                            {formatDate(lastMessage.timestamp)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => router.push(`/chat/${client.id}`)}
-                          className="inline-flex items-center justify-center w-10 h-10 text-pink-500 hover:bg-pink-50 rounded-lg transition-colors"
-                        >
-                          <MessageSquare className="w-5 h-5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* Clients Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="text-gray-500">Carregando clientes...</div>
           </div>
-
-          {filteredClients.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              Nenhum cliente encontrado
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm text-gray-600">Cliente</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-600">Número</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-600">Status</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-600">Última Mensagem</th>
+                    <th className="px-6 py-3 text-center text-sm text-gray-600">Chat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredClients.map((client) => {
+                    const statusConfig = STATUS_CONFIG[client.status] || STATUS_CONFIG[1];
+                    return (
+                      <tr key={client.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={client.photo}
+                              alt={client.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                            <span>{client.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{client.phone}</td>
+                        <td className="px-6 py-4 relative">
+                          <button
+                            onClick={() => setEditingStatusId(editingStatusId === client.id ? null : client.id)}
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs border transition-all hover:shadow-sm ${statusConfig.color}`}
+                          >
+                            {statusConfig.label}
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                          
+                          {editingStatusId === client.id && (
+                            <div
+                              ref={dropdownRef}
+                              className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[200px] py-1"
+                            >
+                              {getAllStatuses().map(status => (
+                                <button
+                                  key={status.value}
+                                  onClick={() => handleChangeStatus(client.id, status.value)}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                                    client.status === status.value ? 'bg-gray-50' : ''
+                                  }`}
+                                >
+                                  <span className={`w-3 h-3 rounded-full ${status.color.split(' ')[0].replace('bg-', 'bg-')}`}></span>
+                                  {status.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <p className="text-gray-600 text-sm truncate max-w-xs">
+                              {client.last_message || 'Sem mensagens'}
+                            </p>
+                            <span className="text-xs text-gray-400 whitespace-nowrap">
+                              {formatDate(client.last_message_at)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            onClick={() => router.push(`/chat/${client.id}`)}
+                            className="inline-flex items-center justify-center w-10 h-10 text-pink-500 hover:bg-pink-50 rounded-lg transition-colors"
+                          >
+                            <MessageSquare className="w-5 h-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+
+            {filteredClients.length === 0 && !loading && (
+              <div className="text-center py-12 text-gray-500">
+                Nenhum cliente encontrado
+              </div>
+            )}
+          </>
+        )}
+      </div>
       </div>
 
       {/* New Message Button */}
