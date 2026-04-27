@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+const { isValidUuid } = require('../companies/utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
@@ -62,7 +63,7 @@ function normalizeBrazilPhone(rawPhone) {
     };
 }
 
-async function findExistingLeadByPhoneVariants(phoneData) {
+async function findExistingLeadByPhoneVariants(companyId, phoneData) {
     const fieldsToCheck = [
         { field: 'phone', values: [phoneData.phone, phoneData.altPhoneWithNine] },
         { field: 'external_key', values: [phoneData.externalKey, phoneData.altExternalKeyWithNine] },
@@ -74,6 +75,7 @@ async function findExistingLeadByPhoneVariants(phoneData) {
             const { data, error } = await supabase
                 .from('leads')
                 .select('id')
+                .eq('company_id', companyId)
                 .eq(item.field, value)
                 .limit(1);
 
@@ -89,12 +91,12 @@ async function findExistingLeadByPhoneVariants(phoneData) {
 }
 
 module.exports = async (req, res) => {
-    const { name, phone } = req.body;
+    const { name, phone, company_id, whatsapp_number_id } = req.body;
 
-    if (!name || !phone) {
+    if (!name || !phone || !company_id) {
         return res.status(400).json({
             success: false,
-            error: "Os campos 'name' e 'phone' sao obrigatorios."
+            error: "Os campos 'name', 'phone' e 'company_id' sao obrigatorios."
         });
     }
 
@@ -115,13 +117,21 @@ module.exports = async (req, res) => {
         });
     }
 
+    if (!isValidUuid(company_id)) {
+        return res.status(400).json({ success: false, error: "O campo 'company_id' deve ser um UUID valido." });
+    }
+
+    if (whatsapp_number_id && !isValidUuid(whatsapp_number_id)) {
+        return res.status(400).json({ success: false, error: "O campo 'whatsapp_number_id' deve ser um UUID valido." });
+    }
+
     const leadId = crypto.randomUUID();
     const now = new Date().toISOString();
 
     try {
         console.log(`[CRM] Criando lead manual: ${trimmedName} (${normalizedPhone.phone})`);
 
-        const existingLead = await findExistingLeadByPhoneVariants(normalizedPhone);
+        const existingLead = await findExistingLeadByPhoneVariants(company_id, normalizedPhone);
         if (existingLead) {
             return res.status(409).json({
                 success: false,
@@ -133,6 +143,8 @@ module.exports = async (req, res) => {
             .from('leads')
             .insert([{
                 id: leadId,
+                company_id,
+                whatsapp_number_id: whatsapp_number_id || null,
                 name: trimmedName,
                 phone: normalizedPhone.phone,
                 external_key: normalizedPhone.externalKey,

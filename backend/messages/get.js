@@ -8,6 +8,11 @@ function normalizeDigits(value) {
     return value ? value.toString().replace(/\D/g, '') : '';
 }
 
+function normalizeWebhookPhone(rawPhone) {
+    const digits = normalizeDigits(rawPhone ? rawPhone.toString().replace(/^whatsapp:/i, '') : '');
+    return digits ? `+${digits}` : null;
+}
+
 function addPhoneVariant(candidates, digits) {
     if (!digits) return;
 
@@ -36,7 +41,21 @@ function buildPhoneCandidates(rawPhone) {
     return Array.from(candidates);
 }
 
-async function findExistingLeadByWebhookPhone(from) {
+async function resolveCompanyWhatsappNumber(rawTo) {
+    const phoneNumber = normalizeWebhookPhone(rawTo);
+    if (!phoneNumber) return null;
+
+    const { data, error } = await supabase
+        .from('company_whatsapp_numbers')
+        .select('id, company_id, phone_number')
+        .eq('phone_number', phoneNumber)
+        .limit(1);
+
+    if (error) throw error;
+    return data && data.length > 0 ? data[0] : null;
+}
+
+async function findExistingLeadByWebhookPhone(companyId, from) {
     const matchesById = new Map();
     const exactExternalKey = from ? from.toString().trim() : '';
 
@@ -44,6 +63,7 @@ async function findExistingLeadByWebhookPhone(from) {
         const { data, error } = await supabase
             .from('leads')
             .select('*')
+            .eq('company_id', companyId)
             .eq('external_key', exactExternalKey)
             .order('updated_at', { ascending: false })
             .limit(1);
@@ -68,6 +88,7 @@ async function findExistingLeadByWebhookPhone(from) {
                 const { data, error } = await supabase
                     .from('leads')
                     .select('*')
+                    .eq('company_id', companyId)
                     .eq(field, value)
                     .order('updated_at', { ascending: false })
                     .limit(1);
@@ -94,11 +115,10 @@ function sendEmptyTwiml(res) {
 }
 
 module.exports = async (req, res) => {
-    // O Twilio manda os dados no formato form-urlencoded.
-    const { From, Body, MessageSid, ProfileName } = req.body || {};
+    const { From, To, Body, MessageSid, ProfileName } = req.body || {};
 
     console.log(`\n=== NOVO WEBHOOK RECEBIDO ===`);
-    console.log(`De: ${From || '[sem From]'} | Nome: ${ProfileName || 'Desconhecido'}`);
+    console.log(`De: ${From || '[sem From]'} | Para: ${To || '[sem To]'} | Nome: ${ProfileName || 'Desconhecido'}`);
     console.log(`Mensagem: ${Body || ''}`);
 
     const now = new Date().toISOString();
@@ -110,10 +130,17 @@ module.exports = async (req, res) => {
             return sendEmptyTwiml(res);
         }
 
+        const companyWhatsappNumber = await resolveCompanyWhatsappNumber(To);
+        if (!companyWhatsappNumber) {
+            console.error(`[CRM] Numero comercial nao mapeado para empresa: ${To || '[sem To]'}`);
+            return sendEmptyTwiml(res);
+        }
+
         if (MessageSid) {
             const { data: duplicateMessages, error: duplicateError } = await supabase
                 .from('messages')
                 .select('id, lead_id')
+                .eq('company_id', companyWhatsappNumber.company_id)
                 .or(`provider_message_id.eq.${MessageSid},message_sid.eq.${MessageSid},idempotency_key.eq.${MessageSid}`)
                 .limit(1);
 
@@ -124,7 +151,7 @@ module.exports = async (req, res) => {
             }
         }
 
-        const existingLead = await findExistingLeadByWebhookPhone(From);
+        const existingLead = await findExistingLeadByWebhookPhone(companyWhatsappNumber.company_id, From);
 
         if (existingLead) {
             const lead = existingLead;
@@ -134,6 +161,7 @@ module.exports = async (req, res) => {
                 .from('leads')
                 .update({
                     name: (ProfileName && lead.name === 'Sem nome') ? ProfileName : lead.name,
+                    whatsapp_number_id: lead.whatsapp_number_id || companyWhatsappNumber.id,
                     last_message: Body || '',
                     last_message_preview: Body ? Body.substring(0, 50) : '',
                     last_message_at: now,
@@ -144,7 +172,8 @@ module.exports = async (req, res) => {
                     inbound_count: Number(lead.inbound_count || 0) + 1,
                     messages_after_last_resume: Number(lead.messages_after_last_resume || 0) + 1
                 })
-                .eq('id', leadId);
+                .eq('id', leadId)
+                .eq('company_id', companyWhatsappNumber.company_id);
 
             if (updateError) console.error("Erro ao atualizar lead existente:", updateError);
             else console.log(`[CRM] Lead atualizado no banco. ID: ${leadId}`);
@@ -158,6 +187,8 @@ module.exports = async (req, res) => {
                 .from('leads')
                 .insert([{
                     id: leadId,
+                    company_id: companyWhatsappNumber.company_id,
+                    whatsapp_number_id: companyWhatsappNumber.id,
                     external_key: From,
                     phone: phoneOnly,
                     whatsapp_from: From,
@@ -186,6 +217,8 @@ module.exports = async (req, res) => {
             .from('messages')
             .insert([{
                 id: messageId,
+                company_id: companyWhatsappNumber.company_id,
+                whatsapp_number_id: companyWhatsappNumber.id,
                 lead_id: leadId,
                 message_sid: providerMessageId,
                 provider_message_id: providerMessageId,

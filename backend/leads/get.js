@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { buildConversationWindow } = require('../chat/utils');
+const { isValidUuid } = require('../companies/utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 const VALID_SEARCH_MODES = ['auto', 'name', 'number'];
@@ -46,10 +47,11 @@ function withConversationWindow(leads) {
     }));
 }
 
-async function fetchLeadsByName(searchTerm) {
+async function fetchLeadsByName(companyId, searchTerm) {
     const { data, error } = await supabase
         .from('leads')
         .select('*')
+        .eq('company_id', companyId)
         .ilike('name', `%${searchTerm}%`)
         .order('updated_at', { ascending: false });
 
@@ -57,7 +59,7 @@ async function fetchLeadsByName(searchTerm) {
     return data || [];
 }
 
-async function fetchLeadsByNumber(searchCandidates) {
+async function fetchLeadsByNumber(companyId, searchCandidates) {
     if (!searchCandidates || searchCandidates.length === 0) {
         return [];
     }
@@ -72,6 +74,7 @@ async function fetchLeadsByNumber(searchCandidates) {
     const { data, error } = await supabase
         .from('leads')
         .select('*')
+        .eq('company_id', companyId)
         .or(filters.join(','))
         .order('updated_at', { ascending: false });
 
@@ -82,6 +85,7 @@ async function fetchLeadsByNumber(searchCandidates) {
 module.exports = async (req, res) => {
     const rawSearch = req.query.search;
     const by = (req.query.by || 'auto').toString().trim().toLowerCase();
+    const companyId = req.query.company_id ? req.query.company_id.toString().trim() : '';
 
     if (!VALID_SEARCH_MODES.includes(by)) {
         return res.status(400).json({
@@ -90,8 +94,15 @@ module.exports = async (req, res) => {
         });
     }
 
+    if (!companyId || !isValidUuid(companyId)) {
+        return res.status(400).json({
+            success: false,
+            error: "Parametro 'company_id' e obrigatorio e deve ser um UUID valido."
+        });
+    }
+
     try {
-        console.log(`[CRM] Buscando leads | by=${by} | search=${rawSearch || '[sem filtro]'}`);
+        console.log(`[CRM] Buscando leads | company_id=${companyId} | by=${by} | search=${rawSearch || '[sem filtro]'}`);
 
         const search = typeof rawSearch === 'string' ? rawSearch.trim() : '';
 
@@ -99,6 +110,7 @@ module.exports = async (req, res) => {
             const { data: leads, error: fetchError } = await supabase
                 .from('leads')
                 .select('*')
+                .eq('company_id', companyId)
                 .order('updated_at', { ascending: false });
 
             if (fetchError) throw fetchError;
@@ -111,7 +123,7 @@ module.exports = async (req, res) => {
         }
 
         if (by === 'name') {
-            const leads = await fetchLeadsByName(search);
+            const leads = await fetchLeadsByName(companyId, search);
 
             return res.status(200).json({
                 success: true,
@@ -127,7 +139,7 @@ module.exports = async (req, res) => {
                 return res.status(200).json({ success: true, count: 0, leads: [] });
             }
 
-            const leads = await fetchLeadsByNumber(searchCandidates);
+            const leads = await fetchLeadsByNumber(companyId, searchCandidates);
 
             return res.status(200).json({
                 success: true,
@@ -138,8 +150,8 @@ module.exports = async (req, res) => {
 
         // by = auto
         const [nameLeads, numberLeads] = await Promise.all([
-            fetchLeadsByName(search),
-            searchCandidates.length > 0 ? fetchLeadsByNumber(searchCandidates) : Promise.resolve([])
+            fetchLeadsByName(companyId, search),
+            searchCandidates.length > 0 ? fetchLeadsByNumber(companyId, searchCandidates) : Promise.resolve([])
         ]);
 
         const uniqueLeadsById = new Map();

@@ -16,6 +16,25 @@ const templatesGet = require('./templates/get');
 const templatesSend = require('./templates/send');
 const leadsGet = require('./leads/get');
 const leadsCreate = require('./leads/create');
+const eventsGet = require('./events/get');
+const eventsGetById = require('./events/getById');
+const eventsCreate = require('./events/create');
+const eventsUpdate = require('./events/update');
+const eventsDelete = require('./events/delete');
+const profilesUpsert = require('./profiles/upsert');
+const profilesGetByPhone = require('./profiles/getByPhone');
+const companiesGet = require('./companies/get');
+const companiesGetById = require('./companies/getById');
+const companiesCreate = require('./companies/create');
+const companyWhatsappGet = require('./companies/whatsapp/get');
+const companyWhatsappCreate = require('./companies/whatsapp/create');
+const companyWhatsappUpdate = require('./companies/whatsapp/update');
+const companyWhatsappDelete = require('./companies/whatsapp/delete');
+const companyMembersGet = require('./companies/members/get');
+const companyMembersUpdate = require('./companies/members/update');
+const companyInvitesGet = require('./companies/invites/get');
+const companyInvitesCreate = require('./companies/invites/create');
+const companyInvitesAccept = require('./companies/invites/accept');
 const sandboxMiddleware = require('./sandbox/middleware');
 const sandboxSessionPreflight = require('./sandbox/session/preflight');
 const sandboxOtpSend = require('./sandbox/otp/send');
@@ -52,6 +71,28 @@ app.post('/api/v2/templates/send', templatesSend);
 
 app.get('/api/v2/leads', leadsGet);
 app.post('/api/v2/leads', leadsCreate);
+
+app.get('/api/v2/events', eventsGet);
+app.get('/api/v2/events/:eventId', eventsGetById);
+app.post('/api/v2/events', eventsCreate);
+app.put('/api/v2/events/:eventId', eventsUpdate);
+app.delete('/api/v2/events/:eventId', eventsDelete);
+
+app.post('/api/v2/profiles', profilesUpsert);
+app.get('/api/v2/profiles/by-phone', profilesGetByPhone);
+
+app.get('/api/v2/companies', companiesGet);
+app.get('/api/v2/companies/:companyId', companiesGetById);
+app.post('/api/v2/companies', companiesCreate);
+app.get('/api/v2/companies/:companyId/whatsapp-numbers', companyWhatsappGet);
+app.post('/api/v2/companies/:companyId/whatsapp-numbers', companyWhatsappCreate);
+app.put('/api/v2/companies/:companyId/whatsapp-numbers/:numberId', companyWhatsappUpdate);
+app.delete('/api/v2/companies/:companyId/whatsapp-numbers/:numberId', companyWhatsappDelete);
+app.get('/api/v2/companies/:companyId/members', companyMembersGet);
+app.put('/api/v2/companies/:companyId/members/:memberId', companyMembersUpdate);
+app.get('/api/v2/companies/:companyId/invites', companyInvitesGet);
+app.post('/api/v2/companies/:companyId/invites', companyInvitesCreate);
+app.post('/api/v2/invites/:inviteId/accept', companyInvitesAccept);
 
 app.use('/api/sandbox', sandboxMiddleware);
 app.post('/api/sandbox/session/preflight', sandboxSessionPreflight);
