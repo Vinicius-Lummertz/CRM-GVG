@@ -4,11 +4,12 @@ const { isValidUuid, validateEventPayload } = require('./utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
-async function fetchEvent(eventId) {
+async function fetchEvent(eventId, companyId) {
     const { data, error } = await supabase
         .from('events')
         .select('id, start_time, end_time')
         .eq('id', eventId)
+        .eq('company_id', companyId)
         .single();
 
     if (error && error.code === 'PGRST116') return null;
@@ -19,9 +20,14 @@ async function fetchEvent(eventId) {
 
 module.exports = async (req, res) => {
     const { eventId } = req.params;
+    const companyId = req.body.company_id;
 
     if (!isValidUuid(eventId)) {
         return res.status(400).json({ success: false, error: "Parametro 'eventId' deve ser um UUID valido." });
+    }
+
+    if (!companyId || !isValidUuid(companyId)) {
+        return res.status(400).json({ success: false, error: "O campo 'company_id' e obrigatorio e deve ser um UUID valido." });
     }
 
     const validation = validateEventPayload(req.body, { partial: true });
@@ -32,7 +38,7 @@ module.exports = async (req, res) => {
     try {
         console.log(`[CRM] Atualizando evento: ${eventId}`);
 
-        const existingEvent = await fetchEvent(eventId);
+        const existingEvent = await fetchEvent(eventId, companyId);
         if (!existingEvent) {
             return res.status(404).json({ success: false, error: "Evento nao encontrado." });
         }
@@ -53,6 +59,7 @@ module.exports = async (req, res) => {
             .from('events')
             .update(updatePayload)
             .eq('id', eventId)
+            .eq('company_id', companyId)
             .select('*')
             .single();
 

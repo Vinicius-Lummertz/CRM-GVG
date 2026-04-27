@@ -8,18 +8,23 @@ const {
     normalizeText,
     resolveLeadPhone
 } = require('./utils');
+const { isValidUuid } = require('../companies/utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_ACCOUNT_AUTH_TOKEN);
 
 module.exports = async (req, res) => {
-    const { phone, text, lead_id } = req.body || {};
+    const { phone, text, lead_id, company_id } = req.body || {};
 
-    if (!lead_id || !text) {
+    if (!lead_id || !text || !company_id) {
         return res.status(400).json({
             success: false,
-            error: "Os campos 'lead_id' e 'text' sao obrigatorios."
+            error: "Os campos 'lead_id', 'text' e 'company_id' sao obrigatorios."
         });
+    }
+
+    if (!isValidUuid(company_id)) {
+        return res.status(400).json({ success: false, error: "O campo 'company_id' deve ser um UUID valido." });
     }
 
     const normalizedText = normalizeText(text);
@@ -32,6 +37,7 @@ module.exports = async (req, res) => {
             .from('leads')
             .select('*')
             .eq('id', lead_id)
+            .eq('company_id', company_id)
             .limit(1);
 
         if (leadError) throw leadError;
@@ -78,6 +84,8 @@ module.exports = async (req, res) => {
             .from('messages')
             .insert([{
                 id: messageId,
+                company_id,
+                whatsapp_number_id: lead.whatsapp_number_id || null,
                 lead_id,
                 message_sid: message.sid,
                 provider_message_id: message.sid,
@@ -108,7 +116,8 @@ module.exports = async (req, res) => {
                 updated_at: now,
                 message_count_total: Number(lead.message_count_total || 0) + 1
             })
-            .eq('id', lead_id);
+            .eq('id', lead_id)
+            .eq('company_id', company_id);
 
         if (updateError) {
             console.error("Erro ao atualizar lead apos envio livre:", updateError);

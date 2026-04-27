@@ -5,18 +5,24 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SEC
 
 module.exports = async (req, res) => {
     const { eventId } = req.params;
+    const companyId = (req.body && req.body.company_id) || req.query.company_id;
 
     if (!isValidUuid(eventId)) {
         return res.status(400).json({ success: false, error: "Parametro 'eventId' deve ser um UUID valido." });
     }
 
+    if (!companyId || !isValidUuid(companyId)) {
+        return res.status(400).json({ success: false, error: "Parametro 'company_id' e obrigatorio e deve ser um UUID valido." });
+    }
+
     try {
-        console.log(`[CRM] Removendo evento: ${eventId}`);
+        console.log(`[CRM] Removendo evento: ${eventId} | company_id=${companyId}`);
 
         const { data: event, error: findError } = await supabase
             .from('events')
             .select('id')
             .eq('id', eventId)
+            .eq('company_id', companyId)
             .single();
 
         if (findError) {
@@ -29,7 +35,8 @@ module.exports = async (req, res) => {
         const { error: deleteError } = await supabase
             .from('events')
             .delete()
-            .eq('id', event.id);
+            .eq('id', event.id)
+            .eq('company_id', companyId);
 
         if (deleteError) throw deleteError;
 

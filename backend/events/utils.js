@@ -78,6 +78,13 @@ function validateEventPayload(body, options = {}) {
     const partial = Boolean(options.partial);
     const payload = {};
 
+    if (!partial || body.company_id !== undefined) {
+        const companyId = parseRequiredString(body.company_id, 'company_id');
+        if (companyId.error) return { error: companyId.error };
+        if (!isValidUuid(companyId.value)) return { error: "O campo 'company_id' deve ser um UUID valido." };
+        payload.company_id = companyId.value;
+    }
+
     if (!partial || body.user_id !== undefined) {
         const userId = parseRequiredString(body.user_id, 'user_id');
         if (userId.error) return { error: userId.error };

@@ -11,6 +11,7 @@ Este modulo disponibiliza os endpoints de gerenciamento de leads no CRM com pers
 #### Query Params
 - `search` (opcional): termo de busca.
 - `by` (opcional): `auto` (default), `name` ou `number`.
+- `company_id` (obrigatorio): UUID da empresa selecionada.
 
 #### Regras de busca
 - `by=name`: busca parcial e case-insensitive em `name`.
@@ -50,6 +51,7 @@ Este modulo disponibiliza os endpoints de gerenciamento de leads no CRM com pers
 #### Body obrigatorio
 ```json
 {
+  "company_id": "uuid-da-empresa",
   "name": "Maria Souza",
   "phone": "5548999991111"
 }

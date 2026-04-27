@@ -46,14 +46,19 @@ async function attachAttendees(events) {
 }
 
 module.exports = async (req, res) => {
+    const companyId = parseOptionalString(req.query.company_id);
     const userId = parseOptionalString(req.query.user_id);
     const status = parseOptionalString(req.query.status);
     const relatedType = parseOptionalString(req.query.related_type);
     const relatedId = parseOptionalString(req.query.related_id);
     const includeAttendees = req.query.include_attendees !== 'false';
 
-    if (!userId || !isValidUuid(userId)) {
-        return res.status(400).json({ success: false, error: "Parametro 'user_id' e obrigatorio e deve ser um UUID valido." });
+    if (!companyId || !isValidUuid(companyId)) {
+        return res.status(400).json({ success: false, error: "Parametro 'company_id' e obrigatorio e deve ser um UUID valido." });
+    }
+
+    if (userId && !isValidUuid(userId)) {
+        return res.status(400).json({ success: false, error: "Parametro 'user_id' deve ser um UUID valido." });
     }
 
     if (status && !VALID_STATUSES.includes(status)) {
@@ -79,14 +84,15 @@ module.exports = async (req, res) => {
     }
 
     try {
-        console.log(`[CRM] Buscando eventos | user_id=${userId}`);
+        console.log(`[CRM] Buscando eventos | company_id=${companyId} | user_id=${userId || '[todos]'}`);
 
         let query = supabase
             .from('events')
             .select('*')
-            .eq('user_id', userId)
+            .eq('company_id', companyId)
             .order('start_time', { ascending: true });
 
+        if (userId) query = query.eq('user_id', userId);
         if (status) query = query.eq('status', status);
         if (relatedType) query = query.eq('related_type', relatedType);
         if (relatedId) query = query.eq('related_id', relatedId);

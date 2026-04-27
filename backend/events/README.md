@@ -9,7 +9,8 @@ Este modulo disponibiliza endpoints para gerenciamento de eventos da agenda com 
 - **Arquivo:** `get.js`
 
 #### Query Params
-- `user_id` (obrigatorio): UUID do usuario dono da agenda.
+- `company_id` (obrigatorio): UUID da empresa selecionada.
+- `user_id` (opcional): UUID do usuario dono/responsavel pela agenda.
 - `from` (opcional): data inicial para buscar eventos que cruzam a janela.
 - `to` (opcional): data final para buscar eventos que cruzam a janela.
 - `status` (opcional): `Pendente`, `Confirmada`, `Cancelada` ou `Finalizada`.
@@ -29,6 +30,7 @@ Este modulo disponibiliza endpoints para gerenciamento de eventos da agenda com 
 ```json
 {
   "user_id": "uuid-do-usuario",
+  "company_id": "uuid-da-empresa",
   "title": "Reuniao de alinhamento",
   "description": "Briefing inicial",
   "location": "Google Meet",

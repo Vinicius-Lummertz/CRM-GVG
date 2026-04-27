@@ -5,18 +5,24 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SEC
 
 module.exports = async (req, res) => {
     const { eventId } = req.params;
+    const companyId = req.query.company_id ? req.query.company_id.toString().trim() : '';
 
     if (!isValidUuid(eventId)) {
         return res.status(400).json({ success: false, error: "Parametro 'eventId' deve ser um UUID valido." });
     }
 
+    if (!companyId || !isValidUuid(companyId)) {
+        return res.status(400).json({ success: false, error: "Parametro 'company_id' e obrigatorio e deve ser um UUID valido." });
+    }
+
     try {
-        console.log(`[CRM] Buscando evento: ${eventId}`);
+        console.log(`[CRM] Buscando evento: ${eventId} | company_id=${companyId}`);
 
         const { data: event, error: eventError } = await supabase
             .from('events')
             .select('*')
             .eq('id', eventId)
+            .eq('company_id', companyId)
             .single();
 
         if (eventError) {
