@@ -97,11 +97,15 @@ export default function ChatPage() {
   const leadName = searchParams.get('name') ?? 'Contato';
   const leadPhone = searchParams.get('phone') ?? '';
   const leadWaId = searchParams.get('wa_id') ?? '';
+  const routeCompanyId = searchParams.get('company_id') ?? '';
   const initialWindowOpen = searchParams.get('window_open') === '1';
   const initialWindowExpiresAt = searchParams.get('window_expires_at') || null;
 
   const [authPhone] = useState<string | null>(() =>
     typeof window !== 'undefined' ? localStorage.getItem('auth_phone') : null
+  );
+  const [companyId] = useState<string>(() =>
+    routeCompanyId || (typeof window !== 'undefined' ? localStorage.getItem('selected_company_id') || '' : '')
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -149,7 +153,7 @@ export default function ChatPage() {
   }, []);
 
   const fetchMessages = useCallback(async (options?: { before?: string; append?: boolean }) => {
-    if (!clientId) return;
+    if (!clientId || !companyId) return;
 
     if (options?.append) {
       setLoadingOlder(true);
@@ -158,7 +162,7 @@ export default function ChatPage() {
     }
 
     try {
-      const query = new URLSearchParams({ limit: '50' });
+      const query = new URLSearchParams({ limit: '50', company_id: companyId });
       if (options?.before) query.set('before', options.before);
 
       const response = await fetch(`/api/v2/chat/${clientId}/messages?${query.toString()}`, {
@@ -186,7 +190,7 @@ export default function ChatPage() {
         void fetch(`/api/v2/chat/${clientId}/read`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ company_id: companyId }),
         });
       }
     } catch {
@@ -195,7 +199,7 @@ export default function ChatPage() {
       setLoadingMessages(false);
       setLoadingOlder(false);
     }
-  }, [clientId]);
+  }, [clientId, companyId]);
 
   const fetchTemplates = useCallback(async () => {
     if (templates.length > 0) return;
@@ -204,7 +208,7 @@ export default function ChatPage() {
     setTemplateError('');
 
     try {
-      const response = await fetch('/api/v2/templates', {
+      const response = await fetch(`/api/v2/templates?company_id=${encodeURIComponent(companyId)}`, {
         cache: 'no-store',
       });
       const payload = await response.json();
@@ -224,7 +228,7 @@ export default function ChatPage() {
     } finally {
       setLoadingTemplates(false);
     }
-  }, [selectTemplate, selectedTemplateId, templates.length]);
+  }, [companyId, selectTemplate, selectedTemplateId, templates.length]);
 
   useEffect(() => {
     if (!authPhone) {
@@ -232,12 +236,20 @@ export default function ChatPage() {
       return;
     }
 
+    if (!companyId) {
+      const timer = window.setTimeout(() => {
+        setMessageError('Empresa nao selecionada. Volte para Conversas e selecione uma empresa.');
+        setLoadingMessages(false);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+
     const timer = window.setTimeout(() => {
       void fetchMessages();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [authPhone, fetchMessages, router]);
+  }, [authPhone, companyId, fetchMessages, router]);
 
   useEffect(() => {
     if (!authPhone) return;
@@ -274,6 +286,7 @@ export default function ChatPage() {
           phone: normalizedPhone,
           text: text.trim(),
           lead_id: clientId,
+          company_id: companyId,
         }),
       });
       const payload = await response.json();
@@ -318,6 +331,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           phone: normalizedPhone,
           lead_id: clientId,
+          company_id: companyId,
           template_id: selectedTemplate.id,
           variables: templateVariables,
         }),

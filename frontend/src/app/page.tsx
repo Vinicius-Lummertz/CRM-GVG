@@ -99,6 +99,18 @@ export default function LoginPage() {
         localStorage.setItem('auth_phone', fullPhone);
         localStorage.setItem('authenticated', 'true');
         localStorage.setItem('auth_sandbox', sandbox ? 'true' : 'false');
+        if (data.profile?.id) {
+          localStorage.setItem('auth_profile_id', data.profile.id);
+          localStorage.setItem('auth_profile', JSON.stringify(data.profile));
+        }
+        if (Array.isArray(data.companies)) {
+          localStorage.setItem('auth_companies', JSON.stringify(data.companies));
+          const currentCompanyId = localStorage.getItem('selected_company_id');
+          const currentStillExists = data.companies.some((company: { id?: string }) => company.id === currentCompanyId);
+          if ((!currentCompanyId || !currentStillExists) && data.companies[0]?.id) {
+            localStorage.setItem('selected_company_id', data.companies[0].id);
+          }
+        }
         router.push('/leads');
       } else {
         setError(data.error || 'Código inválido');

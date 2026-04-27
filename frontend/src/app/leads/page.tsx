@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface ConversationWindow {
@@ -22,6 +22,34 @@ interface Lead {
   conversation_window?: ConversationWindow;
 }
 
+interface Company {
+  id: string;
+  name: string;
+  role?: string;
+  whatsapp_numbers?: Array<{
+    id: string;
+    phone_number: string;
+    label?: string;
+    status?: string;
+  }>;
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function persistCompanies(companies: Company[], selectedCompanyId?: string) {
+  localStorage.setItem('auth_companies', JSON.stringify(companies));
+  if (selectedCompanyId) localStorage.setItem('selected_company_id', selectedCompanyId);
+}
+
 function formatWindowLabel(lead: Lead) {
   if (!lead.conversation_window?.is_open) return 'Janela fechada';
 
@@ -31,14 +59,26 @@ function formatWindowLabel(lead: Lead) {
 }
 
 export default function LeadsPage() {
+  const router = useRouter();
   const [authPhone] = useState<string | null>(() => (
     typeof window !== 'undefined' ? localStorage.getItem('auth_phone') : null
   ));
+  const [profileId] = useState<string | null>(() => (
+    typeof window !== 'undefined' ? localStorage.getItem('auth_profile_id') : null
+  ));
+  const [companies, setCompanies] = useState<Company[]>(() => readJson<Company[]>('auth_companies', []));
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => (
+    typeof window !== 'undefined' ? localStorage.getItem('selected_company_id') || '' : ''
+  ));
+  const selectedCompany = useMemo(
+    () => companies.find((company) => company.id === selectedCompanyId) || companies[0] || null,
+    [companies, selectedCompanyId]
+  );
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const router = useRouter();
 
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
@@ -47,13 +87,52 @@ export default function LeadsPage() {
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
 
+  const [companyName, setCompanyName] = useState('');
+  const [businessDdd, setBusinessDdd] = useState('');
+  const [businessPhone, setBusinessPhone] = useState('');
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyError, setCompanyError] = useState('');
+
+  const activeCompanyId = selectedCompany?.id || '';
+
+  const fetchCompanies = useCallback(async () => {
+    if (!profileId) return;
+
+    const res = await fetch(`/api/v2/companies?user_id=${encodeURIComponent(profileId)}`, { cache: 'no-store' });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Nao foi possivel carregar empresas.');
+    }
+
+    const fetched = (data.companies || []) as Company[];
+    const storedCompanyId = localStorage.getItem('selected_company_id') || '';
+    const nextSelected = fetched.some((company) => company.id === storedCompanyId)
+      ? storedCompanyId
+      : fetched[0]?.id || '';
+
+    setCompanies(fetched);
+    setSelectedCompanyId(nextSelected);
+    persistCompanies(fetched, nextSelected);
+  }, [profileId]);
+
   const fetchLeads = useCallback(async (query: string = '') => {
+    if (!activeCompanyId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const url = `/api/v2/leads${query ? `?search=${encodeURIComponent(query)}&by=auto` : ''}`;
-      const res = await fetch(url, { cache: 'no-store' });
+      const params = new URLSearchParams({ company_id: activeCompanyId });
+      if (query) {
+        params.set('search', query);
+        params.set('by', 'auto');
+      }
+
+      const res = await fetch(`/api/v2/leads?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
 
       if (data.success) {
@@ -66,7 +145,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeCompanyId]);
 
   useEffect(() => {
     if (!authPhone) {
@@ -74,32 +153,115 @@ export default function LeadsPage() {
       return;
     }
 
+    if (!profileId) {
+      const timer = window.setTimeout(() => {
+        setError('Seu login foi validado, mas o perfil ainda nao foi preparado. Entre novamente para concluir a configuracao.');
+        setLoading(false);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+
+    const timer = window.setTimeout(() => {
+      void fetchCompanies().catch((err: unknown) => {
+        setCompanyError(err instanceof Error ? err.message : 'Nao foi possivel carregar suas empresas.');
+        setLoading(false);
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [authPhone, fetchCompanies, profileId, router]);
+
+  useEffect(() => {
+    if (companies.length === 0 || !activeCompanyId) {
+      const timer = window.setTimeout(() => setLoading(false), 0);
+      return () => window.clearTimeout(timer);
+    }
+
     const timer = window.setTimeout(() => {
       void fetchLeads();
     }, 0);
-
     return () => window.clearTimeout(timer);
-  }, [authPhone, fetchLeads, router]);
+  }, [activeCompanyId, companies.length, fetchLeads]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     fetchLeads(search);
   };
 
-  const handleDddChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, '').replace(/^0+/, '');
-    if (value.length > 3) value = value.slice(0, 3);
-    setNewDdd(value);
+  const handleCompanyChange = (companyId: string) => {
+    setSelectedCompanyId(companyId);
+    localStorage.setItem('selected_company_id', companyId);
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length > 9) value = value.slice(0, 9);
+  const formatDdd = (value: string) => value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 3);
+  const formatPhone = (value: string) => {
+    let next = value.replace(/\D/g, '').slice(0, 9);
+    if (next.length > 5) next = next.replace(/^(\d{5})(\d{1,4})/, '$1-$2');
+    return next;
+  };
 
-    if (value.length > 5) {
-      value = value.replace(/^(\d{5})(\d{1,4})/, '$1-$2');
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCompanyError('');
+
+    if (!profileId) {
+      setCompanyError('Perfil de acesso indisponivel. Entre novamente.');
+      return;
     }
-    setNewPhone(value);
+    if (!companyName.trim()) {
+      setCompanyError('Informe o nome da empresa.');
+      return;
+    }
+
+    setCompanyLoading(true);
+
+    try {
+      const companyRes = await fetch('/api/v2/companies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: companyName.trim(), owner_id: profileId }),
+      });
+      const companyPayload = await companyRes.json();
+
+      if (!companyRes.ok || !companyPayload.success) {
+        setCompanyError(companyPayload.error || 'Nao foi possivel criar a empresa.');
+        return;
+      }
+
+      const createdCompany = companyPayload.company as Company;
+      const cleanBusinessPhone = businessPhone.replace(/\D/g, '');
+
+      if (businessDdd.length >= 2 && cleanBusinessPhone.length >= 8) {
+        const numberRes = await fetch(`/api/v2/companies/${createdCompany.id}/whatsapp-numbers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone_number: `55${businessDdd}${cleanBusinessPhone}`,
+            label: 'Comercial',
+            provider: 'meta',
+            status: 'pending',
+            api_config: {},
+          }),
+        });
+        const numberPayload = await numberRes.json();
+
+        if (numberRes.ok && numberPayload.success) {
+          createdCompany.whatsapp_numbers = [numberPayload.whatsappNumber];
+        }
+      }
+
+      const nextCompanies = [...companies, createdCompany];
+      setCompanies(nextCompanies);
+      setSelectedCompanyId(createdCompany.id);
+      persistCompanies(nextCompanies, createdCompany.id);
+      setCompanyName('');
+      setBusinessDdd('');
+      setBusinessPhone('');
+      void fetchLeads();
+    } catch {
+      setCompanyError('Falha de conexao ao criar empresa.');
+    } finally {
+      setCompanyLoading(false);
+    }
   };
 
   const handleAddLead = async (e: React.FormEvent) => {
@@ -107,6 +269,10 @@ export default function LeadsPage() {
     setAddError('');
     const cleanPhone = newPhone.replace(/\D/g, '');
 
+    if (!activeCompanyId) {
+      setAddError('Selecione ou crie uma empresa antes de adicionar leads.');
+      return;
+    }
     if (!newName.trim()) {
       setAddError('O nome e obrigatorio.');
       return;
@@ -129,7 +295,7 @@ export default function LeadsPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name: newName, phone: fullPhone })
+        body: JSON.stringify({ company_id: activeCompanyId, name: newName, phone: fullPhone })
       });
       const data = await res.json();
 
@@ -151,14 +317,91 @@ export default function LeadsPage() {
 
   if (!authPhone) return null;
 
+  if (!activeCompanyId) {
+    return (
+      <div className="container animate-fade-in w-full py-10">
+        <div className="card p-8 max-w-5xl mx-auto">
+          <div className="mb-6">
+            <h2 className="text-2xl mb-2">Configure sua primeira empresa</h2>
+            <p className="text-secondary">
+              Voce entra com seu numero pessoal. Os leads ficam vinculados a empresa e ao WhatsApp comercial conectado.
+            </p>
+          </div>
+
+          {companyError && <div className="bg-danger-light text-danger p-4 rounded-lg mb-5">{companyError}</div>}
+
+          <form onSubmit={handleCreateCompany} className="flex flex-col gap-5">
+            <div>
+              <label className="text-sm text-secondary mb-2 block">Nome da empresa</label>
+              <input
+                className="input-field"
+                placeholder="Ex: GVG Imoveis"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                disabled={companyLoading}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-secondary mb-2 block">WhatsApp comercial</label>
+              <div className="flex gap-2 items-stretch">
+                <div className="input-addon">
+                  <span className="font-semibold text-base">+55</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="DDD"
+                  value={businessDdd}
+                  onChange={(event) => setBusinessDdd(formatDdd(event.target.value))}
+                  className="input-field text-center px-2 min-w-0"
+                  style={{ width: '80px' }}
+                  disabled={companyLoading}
+                />
+                <input
+                  type="text"
+                  className="input-field flex-1 min-w-0"
+                  placeholder="99999-9999"
+                  value={businessPhone}
+                  onChange={(event) => setBusinessPhone(formatPhone(event.target.value))}
+                  disabled={companyLoading}
+                />
+              </div>
+              <p className="text-xs text-secondary mt-2">
+                Esse e o numero que seus clientes chamam. Ele e diferente do seu numero pessoal de acesso.
+              </p>
+            </div>
+
+            <button type="submit" className="btn-primary" disabled={companyLoading || !companyName.trim()}>
+              {companyLoading ? <div className="spinner"></div> : 'Criar empresa'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container animate-fade-in w-full py-10">
       <div className="card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-6 mb-8">
         <div>
-          <h2 className="text-xl mb-1 text-primary">Bem-vindo de volta!</h2>
+          <div className="flex flex-wrap items-center gap-3 mb-2">
+            <h2 className="text-xl text-primary m-0">{selectedCompany?.name || 'Empresa'}</h2>
+            {companies.length > 1 ? (
+              <select
+                className="input-field text-sm py-2"
+                style={{ width: 'auto', minWidth: '220px' }}
+                value={activeCompanyId}
+                onChange={(event) => handleCompanyChange(event.target.value)}
+              >
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+            ) : null}
+          </div>
           <p className="text-success font-medium text-sm flex items-center gap-2">
             <span className="inline-block" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--success)' }}></span>
-            Autenticado como: +{authPhone}
+            Acesso pessoal: +{authPhone}
           </p>
         </div>
 
@@ -194,7 +437,7 @@ export default function LeadsPage() {
                   type="text"
                   placeholder="DDD"
                   value={newDdd}
-                  onChange={handleDddChange}
+                  onChange={(e) => setNewDdd(formatDdd(e.target.value))}
                   className="input-field text-center px-2 min-w-0"
                   style={{ width: '80px' }}
                   disabled={addLoading}
@@ -204,7 +447,7 @@ export default function LeadsPage() {
                   className="input-field flex-1 min-w-0"
                   placeholder="99999-9999"
                   value={newPhone}
-                  onChange={handlePhoneChange}
+                  onChange={(e) => setNewPhone(formatPhone(e.target.value))}
                   disabled={addLoading}
                 />
               </div>
@@ -281,6 +524,7 @@ export default function LeadsPage() {
                       name: lead.name || '',
                       phone: lead.phone || '',
                       wa_id: lead.wa_id || '',
+                      company_id: activeCompanyId,
                       window_open: lead.conversation_window?.is_open ? '1' : '0',
                       window_expires_at: lead.conversation_window?.expires_at || '',
                     });
