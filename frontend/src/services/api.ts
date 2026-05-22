@@ -3,6 +3,10 @@ const SANDBOX_API_KEY = process.env.NEXT_PUBLIC_SANDBOX_API_KEY ?? '';
 
 export type ApiMode = 'real' | 'sandbox';
 
+// Feature flag to toggle between backend APIs and mocked data
+import { USE_MOCKS } from '../config/appConfig';
+import { mockClients, MOCK_VERIFICATION_CODE } from '../app/data/mockData';
+
 // Função auxiliar para adicionar token em headers
 const getAuthHeaders = (token: string | null) => {
   const headers: HeadersInit = {
@@ -30,6 +34,27 @@ export async function sendChatMessage(
   message: string,
   token: string | null = null
 ) {
+  // If mocks are enabled, simulate success without hitting backend
+  if (USE_MOCKS) {
+    try {
+      const lead = mockClients.find((c: any) => c.id === leadId);
+      if (lead) {
+        // append message to mock (in-memory only)
+        if (!('messages' in lead)) (lead as any).messages = [];
+        (lead as any).messages.push({
+          id: `m-mock-${Date.now()}`,
+          text: message,
+          timestamp: new Date().toISOString(),
+          fromMe: true,
+        });
+      }
+      return { success: true };
+    } catch (err) {
+      console.error('Mock sendChatMessage error', err);
+      throw err;
+    }
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/api/v2/chat/send`, {
       method: 'POST',
@@ -53,6 +78,11 @@ export async function sendChatMessage(
 }
 
 export async function sendOtp(phone: string, mode: ApiMode = 'real') {
+  if (USE_MOCKS) {
+    // Return sandbox code for UI display
+    return { success: true, sandboxOtpCode: MOCK_VERIFICATION_CODE };
+  }
+
   const isSandbox = mode === 'sandbox';
   const response = await fetch(`${API_BASE_URL}${isSandbox ? '/api/sandbox/otp/send' : '/api/v2/otp/send'}`, {
     method: 'POST',
@@ -62,13 +92,22 @@ export async function sendOtp(phone: string, mode: ApiMode = 'real') {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || 'Falha ao enviar codigo');
+      console.error(data.error || 'Falha ao enviar codigo');
+      return { success: false, error: data.error || 'Falha ao enviar codigo' };
   }
 
   return data;
 }
 
 export async function verifyOtp(phone: string, code: string, mode: ApiMode = 'real') {
+  if (USE_MOCKS) {
+    if (code === MOCK_VERIFICATION_CODE) {
+      return { token: 'mock-token', refreshToken: 'mock-refresh-token', operator: { id: 'u1', name: 'Mock User' } };
+    }
+    const error = new Error('Codigo invalido');
+    throw error;
+  }
+
   const isSandbox = mode === 'sandbox';
   const response = await fetch(`${API_BASE_URL}${isSandbox ? '/api/sandbox/otp/verify' : '/api/v2/otp/verify'}`, {
     method: 'POST',
@@ -92,6 +131,10 @@ export async function verifyOtp(phone: string, code: string, mode: ApiMode = 're
  */
 export async function getAvailableTemplates(token: string | null = null) {
   try {
+    if (USE_MOCKS) {
+      return { success: true, templates: [] };
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/v2/templates`, {
       method: 'GET',
       headers: getAuthHeaders(token),
@@ -119,6 +162,26 @@ export async function getLeads(
   token: string | null = null
 ) {
   try {
+    if (USE_MOCKS) {
+      // Basic filtering simulation
+      let leads = mockClients.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        photo: c.photo,
+        status: c.status,
+        last_message_preview: c.messages?.[c.messages.length - 1]?.text || c.last_message || '',
+        last_message_at: c.messages?.[c.messages.length - 1]?.timestamp || c.last_message_at || new Date().toISOString(),
+      }));
+
+      if (search) {
+        const q = search.toLowerCase();
+        leads = leads.filter((l: any) => l.name.toLowerCase().includes(q) || l.phone.includes(q));
+      }
+
+      return { success: true, leads };
+    }
+
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (by) params.append('by', by);
@@ -150,6 +213,22 @@ export async function createLead(
   phone: string,
   token: string | null = null
 ) {
+  if (USE_MOCKS) {
+    // Simulate creation
+    const newLead = {
+      success: true,
+      leadId: `mock-${Date.now()}`,
+      lead: { id: `mock-${Date.now()}`, name, phone, status: 'lead' },
+    } as any;
+    // push to mockClients (in-memory)
+    try {
+      (mockClients as any).unshift(newLead.lead);
+    } catch (e) {
+      // ignore
+    }
+    return newLead;
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/api/v2/leads`, {
       method: 'POST',
@@ -181,6 +260,18 @@ export async function getMessagesByLeadId(
   token: string | null = null
 ) {
   try {
+    if (USE_MOCKS) {
+      const lead = mockClients.find((c: any) => c.id === leadId);
+      if (!lead) return { success: false, messages: [] };
+      const messages = (lead.messages || []).map((m: any) => ({
+        id: m.id,
+        body: m.text,
+        created_at: m.timestamp,
+        direction: m.fromMe ? 'outbound' : 'inbound',
+      }));
+      return { success: true, messages };
+    }
+
     const response = await fetch(
       `${API_BASE_URL}/api/v2/chat/${encodeURIComponent(leadId)}/messages`,
       {
@@ -211,6 +302,20 @@ export async function updateLeadStatus(
   status: string,
   token: string | null = null
 ) {
+  if (USE_MOCKS) {
+    try {
+      const lead = (mockClients as any).find((c: any) => c.id === leadId);
+      if (lead) {
+        lead.status = status;
+        return { success: true };
+      }
+      return { success: false, error: 'Lead not found in mock' };
+    } catch (e) {
+      console.error('Mock updateLeadStatus error', e);
+      throw e;
+    }
+  }
+
   try {
     const response = await fetch(
       `${API_BASE_URL}/api/v2/leads/${encodeURIComponent(leadId)}/status`,
