@@ -10,7 +10,7 @@ export default function CRMPage() {
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('authenticated') === 'true';
     if (!isAuthenticated) {
-      router.push('/');
+      console.log('User not authenticated, redirecting to login page.');
     }
   }, [router]);
 

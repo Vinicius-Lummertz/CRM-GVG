@@ -18,7 +18,7 @@ export default function ChatPage({ params }: ChatPageProps) {
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('authenticated') === 'true';
     if (!isAuthenticated) {
-      router.push('/');
+      console.log('User not authenticated, redirecting to login page.');
     }
   }, [router]);
 

@@ -1,4 +1,4 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://crm-gvg.onrender.com';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 const SANDBOX_API_KEY = process.env.NEXT_PUBLIC_SANDBOX_API_KEY ?? '';
 
 export type ApiMode = 'real' | 'sandbox';
@@ -7,7 +7,7 @@ export type ApiMode = 'real' | 'sandbox';
 import { USE_MOCKS } from '../config/appConfig';
 import { mockClients, MOCK_VERIFICATION_CODE } from '../app/data/mockData';
 
-// Função auxiliar para adicionar token em headers
+// FunÃ§Ã£o auxiliar para adicionar token em headers
 const getAuthHeaders = (token: string | null) => {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -15,6 +15,13 @@ const getAuthHeaders = (token: string | null) => {
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  if (typeof window !== 'undefined') {
+    const selectedCompanyId = localStorage.getItem('selected_company_id');
+    if (selectedCompanyId) {
+      headers['x-company-id'] = selectedCompanyId;
+    }
   }
 
   return headers;
@@ -126,7 +133,7 @@ export async function verifyOtp(phone: string, code: string, mode: ApiMode = 're
 }
 
 /**
- * Busca templates disponíveis
+ * Busca templates disponÃ­veis
  * GET /api/v2/templates
  */
 export async function getAvailableTemplates(token: string | null = null) {
@@ -281,8 +288,8 @@ export async function getMessagesByLeadId(
     );
 
     if (!response.ok) {
-      // Se o endpoint não estiver implementado ou não retornar mensagens,
-      // tratamos como lista vazia para não quebrar a tela de chat.
+      // Se o endpoint nÃ£o estiver implementado ou nÃ£o retornar mensagens,
+      // tratamos como lista vazia para nÃ£o quebrar a tela de chat.
       return { success: false, messages: [] };
     }
 

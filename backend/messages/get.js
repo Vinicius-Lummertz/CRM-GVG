@@ -4,115 +4,112 @@ const crypto = require('crypto');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
+function normalizePhone(rawPhone) {
+    if (typeof rawPhone !== 'string') return null;
+    const digits = rawPhone.trim().replace(/^whatsapp:/i, '').replace(/\D/g, '');
+    if (!digits || digits.length < 10 || digits.length > 15) return null;
+    return `+${digits}`;
+}
+
+function buildCompanyPhoneCandidates(rawPhone) {
+    const normalized = normalizePhone(rawPhone);
+    if (!normalized) return [];
+
+    const digits = normalized.replace('+', '');
+    const candidates = new Set([normalized, digits, `whatsapp:${normalized}`]);
+    return Array.from(candidates);
+}
+
 module.exports = async (req, res) => {
-    // O Twilio manda os dados no formato form-urlencoded
-    // ProfileName costuma vir nas requisições do WhatsApp Business API
-    const { From, To, Body, MessageSid, ProfileName } = req.body;
-
-    console.log(`\n=== NOVO WEBHOOK RECEBIDO ===`);
-    console.log(`De: ${From} | Nome: ${ProfileName || 'Desconhecido'}`);
-    console.log(`Mensagem: ${Body}`);
-
+    const { From, To, Body, ProfileName } = req.body || {};
+    const normalizedFrom = normalizePhone(From);
+    const companyPhoneCandidates = buildCompanyPhoneCandidates(To);
     const now = new Date().toISOString();
-    let leadId;
 
     try {
-        // 1. Procurar se o Lead já existe pelo external_key (neste caso, o "From")
+        if (!normalizedFrom) {
+            throw new Error('Telefone de origem invalido no webhook.');
+        }
+
+        if (companyPhoneCandidates.length === 0) {
+            throw new Error('Telefone comercial de destino invalido no webhook.');
+        }
+
+        const { data: companies, error: companyError } = await supabase
+            .from('companies')
+            .select('id, commercial_phone')
+            .in('commercial_phone', companyPhoneCandidates)
+            .limit(1);
+
+        if (companyError) throw companyError;
+        if (!companies || companies.length === 0) {
+            throw new Error('Nenhuma empresa encontrada para o numero comercial recebido.');
+        }
+
+        const companyId = companies[0].id;
+
         const { data: existingLeads, error: findError } = await supabase
             .from('leads')
             .select('*')
-            .eq('external_key', From)
+            .eq('company_id', companyId)
+            .eq('phone', normalizedFrom)
             .limit(1);
 
         if (findError) throw findError;
 
+        let lead = null;
         if (existingLeads && existingLeads.length > 0) {
-            // LEAD EXISTE: Apenas atualizamos os contadores e datas dele
-            const lead = existingLeads[0];
-            leadId = lead.id;
-
+            lead = existingLeads[0];
             const { error: updateError } = await supabase
                 .from('leads')
                 .update({
-                    name: (ProfileName && lead.name === 'Sem nome') ? ProfileName : lead.name,
-                    last_message: Body,
-                    last_message_preview: Body ? Body.substring(0, 50) : '',
-                    last_message_at: now,
-                    last_inbound_at: now,
-                    updated_at: now,
-                    unread_count: Number(lead.unread_count || 0) + 1,
-                    message_count_total: Number(lead.message_count_total || 0) + 1,
-                    inbound_count: Number(lead.inbound_count || 0) + 1,
-                    messages_after_last_resume: Number(lead.messages_after_last_resume || 0) + 1
+                    name: ProfileName && lead.name === 'Sem nome' ? ProfileName : lead.name,
+                    last_conversation_summary: Body || '',
+                    updated_at: now
                 })
-                .eq('id', leadId);
+                .eq('id', lead.id);
 
-            if (updateError) console.error("Erro ao atualizar lead existente:", updateError);
-            else console.log(`[CRM] Lead atualizado no banco. ID: ${leadId}`);
-
+            if (updateError) throw updateError;
         } else {
-            // LEAD NOVO: Inserção dinâmica no banco
-            leadId = crypto.randomUUID();
+            const leadPayload = {
+                id: crypto.randomUUID(),
+                company_id: companyId,
+                phone: normalizedFrom,
+                name: ProfileName || 'Sem nome',
+                status: 'possivel_cliente',
+                last_conversation_summary: Body || '',
+                created_at: now,
+                updated_at: now
+            };
 
-            // Limpamos a string do telefone ('whatsapp:+5548...' -> '5548...')
-            const phoneOnly = From.replace('whatsapp:', '');
-            const waId = phoneOnly.replace('+', '');
-
-            const { error: insertError } = await supabase
+            const { data: insertedLead, error: insertLeadError } = await supabase
                 .from('leads')
-                .insert([{
-                    id: leadId,
-                    external_key: From, // Ex: whatsapp:+5548...
-                    phone: phoneOnly,
-                    whatsapp_from: From,
-                    wa_id: waId,
-                    name: ProfileName || 'Sem nome', // Tenta pegar o nome do perfil de WA
-                    last_message: Body,
-                    last_message_preview: Body ? Body.substring(0, 50) : '',
-                    last_message_at: now,
-                    last_inbound_at: now,
-                    created_at: now,
-                    updated_at: now,
-                    unread_count: 1,
-                    message_count_total: 1,
-                    inbound_count: 1,
-                    messages_after_last_resume: 1
-                }]);
+                .insert([leadPayload])
+                .select('*')
+                .limit(1);
 
-            if (insertError) throw insertError;
-            console.log(`[CRM] + Novo lead dinâmico criado! ID: ${leadId}`);
+            if (insertLeadError) throw insertLeadError;
+            lead = insertedLead[0];
         }
 
-        // 2. Gravar o Histórico da Mensagem que Acabou de Chegar
-        const messageId = crypto.randomUUID();
-        const { error: msgError } = await supabase
+        const { error: messageError } = await supabase
             .from('messages')
             .insert([{
-                id: messageId,
-                lead_id: leadId,
-                message_sid: MessageSid,
-                provider_message_id: MessageSid,
+                id: crypto.randomUUID(),
+                lead_id: lead.id,
                 direction: 'inbound',
-                body: Body,
-                preview: Body ? Body.substring(0, 50) : '',
-                message_type: 'text',
-                sent_by_customer: 1,  // Flag: Veio do cliente para o bot
-                delivery_status: 'received',
+                content: Body || '',
+                has_media: false,
+                media_url: null,
+                sender_id: null,
                 created_at: now
             }]);
 
-        if (msgError) {
-            console.error("Erro ao salvar a mensagem recebida no DB:", msgError);
-        } else {
-            console.log(`[CRM] Mensagem armazenada e linkada ao Lead ${leadId}`);
-        }
-
-    } catch (dbError) {
-        console.error("Erro ao processar as ações de banco de dados no webhook:", dbError);
+        if (messageError) throw messageError;
+    } catch (error) {
+        console.error('Erro ao processar webhook inbound:', error);
     }
 
-    // 3. Resposta Padrão do Twilio (TwiML em XML)
-    // Precisamos sempre devolver 200 pro Twilio entender que a requisição não falhou!
     const twiml = new twilio.twiml.MessagingResponse();
-    res.status(200).type('text/xml').send(twiml.toString());
+    return res.status(200).type('text/xml').send(twiml.toString());
 };

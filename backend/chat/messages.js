@@ -3,10 +3,20 @@ const { parsePositiveLimit } = require('./utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
+function mapMessageForResponse(message) {
+    return {
+        ...message,
+        body: message.content || '',
+        preview: (message.content || '').substring(0, 50),
+        sent_by_customer: message.direction === 'inbound' ? 1 : 0
+    };
+}
+
 module.exports = async (req, res) => {
     const { leadId } = req.params;
     const limit = parsePositiveLimit(req.query.limit);
     const before = req.query.before ? new Date(req.query.before) : null;
+    const companyId = req.auth.companyId;
 
     if (!leadId) {
         return res.status(400).json({
@@ -23,7 +33,17 @@ module.exports = async (req, res) => {
     }
 
     try {
-        console.log(`[CRM] Buscando mensagens do lead ${leadId} | limit=${limit}`);
+        const { data: leadRows, error: leadError } = await supabase
+            .from('leads')
+            .select('id')
+            .eq('id', leadId)
+            .eq('company_id', companyId)
+            .limit(1);
+
+        if (leadError) throw leadError;
+        if (!leadRows || leadRows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Lead nao encontrado.' });
+        }
 
         let query = supabase
             .from('messages')
@@ -41,7 +61,7 @@ module.exports = async (req, res) => {
 
         const rows = data || [];
         const hasMore = rows.length > limit;
-        const messages = rows.slice(0, limit).reverse();
+        const messages = rows.slice(0, limit).reverse().map(mapMessageForResponse);
         const oldestMessage = messages[0] || null;
 
         return res.status(200).json({
@@ -52,7 +72,7 @@ module.exports = async (req, res) => {
             messages
         });
     } catch (error) {
-        console.error("Erro ao buscar mensagens do chat:", error);
+        console.error('Erro ao buscar mensagens do chat:', error);
         return res.status(500).json({ success: false, error: error.message });
     }
 };

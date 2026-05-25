@@ -79,6 +79,18 @@ export default function Login() {
       if (data?.operator) {
         localStorage.setItem('operator', JSON.stringify(data.operator));
       }
+      if (data?.profile?.id) {
+        localStorage.setItem('auth_profile_id', data.profile.id);
+      }
+      if (data?.profile?.phone) {
+        localStorage.setItem('auth_phone', data.profile.phone);
+      }
+      if (data?.selectedCompanyId) {
+        localStorage.setItem('selected_company_id', data.selectedCompanyId);
+      }
+      if (Array.isArray(data?.companies)) {
+        localStorage.setItem('auth_companies', JSON.stringify(data.companies));
+      }
 
       localStorage.setItem('authenticated', 'true');
       localStorage.setItem('userPhone', phone.trim());

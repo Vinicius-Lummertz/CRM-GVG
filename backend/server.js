@@ -5,6 +5,7 @@ const cors = require('cors');
 const messagesGet = require('./messages/get');
 const messagesSendOtp = require('./messages/send/otp');
 const messagesVerifyOtp = require('./messages/verify/otp');
+const { authRequired } = require('./auth/session');
 const chatMessages = require('./chat/messages');
 const chatRead = require('./chat/read');
 const chatSendText = require('./chat/sendText');
@@ -38,19 +39,19 @@ app.post('/api/v2/otp/webhook', messagesGet);
 app.post('/api/v2/otp/send', messagesSendOtp);
 app.post('/api/v2/otp/verify', messagesVerifyOtp);
 
-app.get('/api/v2/chat/:leadId/messages', chatMessages);
-app.post('/api/v2/chat/:leadId/read', chatRead);
-app.post('/api/v2/chat/send', chatSendText);
-app.post('/api/v2/chat/send-template', chatSendTemplate);
+app.get('/api/v2/chat/:leadId/messages', authRequired, chatMessages);
+app.post('/api/v2/chat/:leadId/read', authRequired, chatRead);
+app.post('/api/v2/chat/send', authRequired, chatSendText);
+app.post('/api/v2/chat/send-template', authRequired, chatSendTemplate);
 app.post('/api/v2/chat/status-webhook', chatStatusWebhook);
 app.post('/api/v2/chat/webhook', messagesGet);
 
-app.post('/api/v2/templates', templatesCreate);
-app.get('/api/v2/templates', templatesGet);
+app.post('/api/v2/templates', authRequired, templatesCreate);
+app.get('/api/v2/templates', authRequired, templatesGet);
 
-app.get('/api/v2/leads', leadsGet);
-app.post('/api/v2/leads', leadsCreate);
-app.put('/api/v2/leads/:leadId/status', leadsUpdateStatus);
+app.get('/api/v2/leads', authRequired, leadsGet);
+app.post('/api/v2/leads', authRequired, leadsCreate);
+app.put('/api/v2/leads/:leadId/status', authRequired, leadsUpdateStatus);
 
 app.use('/api/sandbox', sandboxMiddleware);
 app.post('/api/sandbox/session/preflight', sandboxSessionPreflight);
@@ -59,7 +60,7 @@ app.post('/api/sandbox/otp/verify', sandboxOtpVerify);
 app.post('/api/sandbox/chat/send', sandboxChatSend);
 app.post('/api/sandbox/templates/send', sandboxTemplateSend);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);

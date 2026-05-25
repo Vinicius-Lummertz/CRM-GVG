@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const { buildConversationWindow } = require('../chat/utils');
+const { withLegacyStatus } = require('./statusMap');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 const VALID_SEARCH_MODES = ['auto', 'name', 'number'];
@@ -13,7 +13,6 @@ function addNumberVariant(candidates, digits) {
 
     candidates.add(digits);
 
-    // Compatibilidade entre formatos com e sem o '9' apos o DDD brasileiro.
     if (digits.startsWith('55') && digits.length >= 5) {
         if (digits[4] === '9') {
             candidates.add(`${digits.slice(0, 4)}${digits.slice(5)}`);
@@ -30,7 +29,6 @@ function buildNumberSearchCandidates(rawSearch) {
     const candidates = new Set();
     addNumberVariant(candidates, digits);
 
-    // Ajuda quem busca sem o codigo 55; a base e tratada como Brasil.
     if (!digits.startsWith('55')) {
         addNumberVariant(candidates, `55${digits}`);
     }
@@ -38,18 +36,22 @@ function buildNumberSearchCandidates(rawSearch) {
     return Array.from(candidates).filter((value) => value.length >= 4);
 }
 
-function withConversationWindow(leads) {
-    const now = new Date();
-    return (leads || []).map((lead) => ({
+function mapLeadForResponse(lead) {
+    const lastMessagePreview = lead.last_conversation_summary || '';
+
+    return withLegacyStatus({
         ...lead,
-        conversation_window: buildConversationWindow(lead, now)
-    }));
+        last_message_preview: lastMessagePreview,
+        last_message: lastMessagePreview,
+        last_message_at: lead.updated_at || lead.created_at || null
+    });
 }
 
-async function fetchLeadsByName(searchTerm) {
+async function fetchLeadsByName(companyId, searchTerm) {
     const { data, error } = await supabase
         .from('leads')
         .select('*')
+        .eq('company_id', companyId)
         .ilike('name', `%${searchTerm}%`)
         .order('updated_at', { ascending: false });
 
@@ -57,7 +59,7 @@ async function fetchLeadsByName(searchTerm) {
     return data || [];
 }
 
-async function fetchLeadsByNumber(searchCandidates) {
+async function fetchLeadsByNumber(companyId, searchCandidates) {
     if (!searchCandidates || searchCandidates.length === 0) {
         return [];
     }
@@ -65,13 +67,12 @@ async function fetchLeadsByNumber(searchCandidates) {
     const filters = [];
     searchCandidates.forEach((digits) => {
         filters.push(`phone.ilike.%${digits}%`);
-        filters.push(`external_key.ilike.%${digits}%`);
-        filters.push(`wa_id.ilike.%${digits}%`);
     });
 
     const { data, error } = await supabase
         .from('leads')
         .select('*')
+        .eq('company_id', companyId)
         .or(filters.join(','))
         .order('updated_at', { ascending: false });
 
@@ -91,32 +92,35 @@ module.exports = async (req, res) => {
     }
 
     try {
-        console.log(`[CRM] Buscando leads | by=${by} | search=${rawSearch || '[sem filtro]'}`);
-
+        const companyId = req.auth.companyId;
         const search = typeof rawSearch === 'string' ? rawSearch.trim() : '';
+
+        console.log(`[CRM] Buscando leads da empresa ${companyId} | by=${by} | search=${search || '[sem filtro]'}`);
 
         if (!search) {
             const { data: leads, error: fetchError } = await supabase
                 .from('leads')
                 .select('*')
+                .eq('company_id', companyId)
                 .order('updated_at', { ascending: false });
 
             if (fetchError) throw fetchError;
 
+            const mapped = (leads || []).map(mapLeadForResponse);
             return res.status(200).json({
                 success: true,
-                count: leads ? leads.length : 0,
-                leads: withConversationWindow(leads)
+                count: mapped.length,
+                leads: mapped
             });
         }
 
         if (by === 'name') {
-            const leads = await fetchLeadsByName(search);
-
+            const leads = await fetchLeadsByName(companyId, search);
+            const mapped = leads.map(mapLeadForResponse);
             return res.status(200).json({
                 success: true,
-                count: leads.length,
-                leads: withConversationWindow(leads)
+                count: mapped.length,
+                leads: mapped
             });
         }
 
@@ -127,19 +131,18 @@ module.exports = async (req, res) => {
                 return res.status(200).json({ success: true, count: 0, leads: [] });
             }
 
-            const leads = await fetchLeadsByNumber(searchCandidates);
-
+            const leads = await fetchLeadsByNumber(companyId, searchCandidates);
+            const mapped = leads.map(mapLeadForResponse);
             return res.status(200).json({
                 success: true,
-                count: leads.length,
-                leads: withConversationWindow(leads)
+                count: mapped.length,
+                leads: mapped
             });
         }
 
-        // by = auto
         const [nameLeads, numberLeads] = await Promise.all([
-            fetchLeadsByName(search),
-            searchCandidates.length > 0 ? fetchLeadsByNumber(searchCandidates) : Promise.resolve([])
+            fetchLeadsByName(companyId, search),
+            searchCandidates.length > 0 ? fetchLeadsByNumber(companyId, searchCandidates) : Promise.resolve([])
         ]);
 
         const uniqueLeadsById = new Map();
@@ -153,13 +156,14 @@ module.exports = async (req, res) => {
             return dateB - dateA;
         });
 
+        const mapped = leads.map(mapLeadForResponse);
         return res.status(200).json({
             success: true,
-            count: leads.length,
-            leads: withConversationWindow(leads)
+            count: mapped.length,
+            leads: mapped
         });
     } catch (error) {
-        console.error("Erro ao buscar leads:", error);
+        console.error('Erro ao buscar leads:', error);
         return res.status(500).json({ success: false, error: error.message });
     }
 };

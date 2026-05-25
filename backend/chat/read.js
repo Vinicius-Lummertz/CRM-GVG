@@ -4,6 +4,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SEC
 
 module.exports = async (req, res) => {
     const { leadId } = req.params;
+    const companyId = req.auth.companyId;
 
     if (!leadId) {
         return res.status(400).json({
@@ -13,25 +14,24 @@ module.exports = async (req, res) => {
     }
 
     try {
-        console.log(`[CRM] Marcando conversa como lida: ${leadId}`);
-
-        const { error } = await supabase
+        const { data: leadRows, error: leadError } = await supabase
             .from('leads')
-            .update({
-                unread_count: 0,
-                messages_after_last_resume: 0,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', leadId);
+            .select('id')
+            .eq('id', leadId)
+            .eq('company_id', companyId)
+            .limit(1);
 
-        if (error) throw error;
+        if (leadError) throw leadError;
+        if (!leadRows || leadRows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Lead nao encontrado.' });
+        }
 
         return res.status(200).json({
             success: true,
-            message: "Conversa marcada como lida."
+            message: 'Conversa marcada como lida.'
         });
     } catch (error) {
-        console.error("Erro ao marcar conversa como lida:", error);
+        console.error('Erro ao marcar conversa como lida:', error);
         return res.status(500).json({ success: false, error: error.message });
     }
 };
