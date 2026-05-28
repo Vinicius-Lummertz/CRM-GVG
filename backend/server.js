@@ -9,6 +9,7 @@ const chatMessages = require('./chat/messages');
 const chatRead = require('./chat/read');
 const chatSendText = require('./chat/sendText');
 const chatSendTemplate = require('./chat/sendTemplate');
+const chatSendRestart = require('./chat/sendRestart');
 const chatStatusWebhook = require('./chat/statusWebhook');
 const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
@@ -71,6 +72,7 @@ app.get('/api/v2/chat/:leadId/messages', chatMessages);
 app.post('/api/v2/chat/:leadId/read', chatRead);
 app.post('/api/v2/chat/send', chatSendText);
 app.post('/api/v2/chat/send-template', chatSendTemplate);
+app.post('/api/v2/chat/send-restart', chatSendRestart);
 app.post('/api/v2/chat/status-webhook', chatStatusWebhook);
 app.post('/api/v2/chat/webhook', messagesGet);
 

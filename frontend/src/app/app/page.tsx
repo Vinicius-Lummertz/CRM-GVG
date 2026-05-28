@@ -72,12 +72,6 @@ type ChatMessage = {
   body?: string | null;
   created_at: string;
 };
-type MessageTemplate = {
-  id: string;
-  name: string;
-  body: string;
-  content_sid: string;
-};
 
 const API_BASE = "https://crm-gvg.onrender.com";
 type IconName = "home" | "kanban" | "calendar" | "tasks" | "chat" | "user" | "settings";
@@ -199,9 +193,6 @@ export default function AppPage() {
   const [chatMessagesError, setChatMessagesError] = useState<string | null>(null);
   const [chatText, setChatText] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [templatesError, setTemplatesError] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("crm_session");
@@ -807,43 +798,18 @@ export default function AppPage() {
     }
   }
 
-  async function loadTemplates(activeCompanyId: string) {
-    setLoadingTemplates(true);
-    setTemplatesError(null);
-    try {
-      const response = await fetch(
-        `${API_BASE}/api/v2/templates?company_id=${encodeURIComponent(activeCompanyId)}&name=${encodeURIComponent("restart_conversa")}&limit=5`
-      );
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Falha ao carregar templates.");
-      }
-      const rows = (data.templates || []) as MessageTemplate[];
-      setTemplates(rows);
-    } catch (error) {
-      setTemplatesError(error instanceof Error ? error.message : "Falha ao carregar templates.");
-    } finally {
-      setLoadingTemplates(false);
-    }
-  }
-
   async function sendRestartTemplate() {
     if (!companyId || !selectedChatLeadId || !selectedChatLead) return;
-    const template = templates.find((item) => (item.name || "").trim().toLowerCase() === "restart_conversa");
-    if (!template) return;
 
     setSendingChat(true);
     setChatMessagesError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v2/chat/send-template`, {
+      const response = await fetch(`${API_BASE}/api/v2/chat/send-restart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id: companyId,
-          lead_id: selectedChatLeadId,
-          template_id: template.id,
-          content_sid: template.content_sid,
-          variables: { "1": selectedChatLead.name || "cliente" },
+          lead_id: selectedChatLeadId
         }),
       });
       const data = await response.json();
@@ -873,13 +839,6 @@ export default function AppPage() {
     if (!selectedChatLeadId) return;
     void loadMessagesForLead(selectedChatLeadId);
   }, [selectedModule, isChatConnected, selectedChatLeadId, companyId]);
-
-  useEffect(() => {
-    if (selectedModule !== "chat") return;
-    if (!isChatConnected) return;
-    if (!companyId) return;
-    void loadTemplates(companyId);
-  }, [selectedModule, isChatConnected, companyId]);
 
   const filteredTasks = tasks.filter((task) => {
     const lead = getLeadById(task.lead_id);
@@ -1685,21 +1644,11 @@ export default function AppPage() {
                             </p>
                             <button
                               onClick={sendRestartTemplate}
-                              disabled={
-                                sendingChat ||
-                                loadingTemplates ||
-                                !templates.some((template) => (template.name || "").trim().toLowerCase() === "restart_conversa")
-                              }
+                              disabled={sendingChat}
                               className="mt-2 h-10 rounded-xl border border-amber-300 bg-white px-3 text-sm font-medium text-amber-800 disabled:opacity-60"
                             >
                               Enviar mensagem de abertura
                             </button>
-                            {templatesError ? <p className="mt-2 text-xs text-rose-600">{templatesError}</p> : null}
-                            {!loadingTemplates && !templates.some((template) => (template.name || "").trim().toLowerCase() === "restart_conversa") ? (
-                              <p className="mt-2 text-xs text-rose-600">
-                                Template obrigatorio `restart_conversa` nao encontrado para esta empresa.
-                              </p>
-                            ) : null}
                           </div>
                         ) : null}
 
