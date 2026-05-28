@@ -58,6 +58,14 @@ type ChatConnection = {
   connected_at?: string | null;
   last_error?: string | null;
 };
+type ChatMessage = {
+  id: string;
+  lead_id: string;
+  direction: "inbound" | "outbound";
+  content?: string | null;
+  body?: string | null;
+  created_at: string;
+};
 
 const API_BASE = "https://crm-gvg.onrender.com";
 type IconName = "home" | "kanban" | "calendar" | "tasks" | "chat" | "user" | "settings";
@@ -172,6 +180,13 @@ export default function AppPage() {
   const [chatMetaBusinessId, setChatMetaBusinessId] = useState("");
   const [chatMetaPhoneId, setChatMetaPhoneId] = useState("");
   const [savingChatConnection, setSavingChatConnection] = useState(false);
+  const [chatLeadSearch, setChatLeadSearch] = useState("");
+  const [selectedChatLeadId, setSelectedChatLeadId] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [loadingChatMessages, setLoadingChatMessages] = useState(false);
+  const [chatMessagesError, setChatMessagesError] = useState<string | null>(null);
+  const [chatText, setChatText] = useState("");
+  const [sendingChat, setSendingChat] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("crm_session");
@@ -715,6 +730,75 @@ export default function AppPage() {
     }
   }
 
+  const chatStatus = (chatConnection?.status || "").toString().trim().toLowerCase();
+  const isChatConnected = chatStatus === "conectado";
+
+  async function loadMessagesForLead(leadId: string) {
+    if (!companyId) return;
+    setLoadingChatMessages(true);
+    setChatMessagesError(null);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v2/chat/${leadId}/messages?company_id=${encodeURIComponent(companyId)}&limit=80`
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao carregar mensagens.");
+      }
+      setChatMessages((data.messages || []) as ChatMessage[]);
+    } catch (error) {
+      setChatMessagesError(error instanceof Error ? error.message : "Falha ao carregar mensagens.");
+    } finally {
+      setLoadingChatMessages(false);
+    }
+  }
+
+  async function sendChatMessage() {
+    if (!companyId || !selectedChatLeadId) return;
+    const text = chatText.trim();
+    if (!text) return;
+
+    setSendingChat(true);
+    setChatMessagesError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/chat/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: companyId,
+          lead_id: selectedChatLeadId,
+          text,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || "Falha ao enviar mensagem.");
+      }
+      setChatText("");
+      await loadMessagesForLead(selectedChatLeadId);
+      await refreshLeads();
+    } catch (error) {
+      setChatMessagesError(error instanceof Error ? error.message : "Falha ao enviar mensagem.");
+    } finally {
+      setSendingChat(false);
+    }
+  }
+
+  useEffect(() => {
+    if (selectedModule !== "chat") return;
+    if (!isChatConnected) return;
+    if (selectedChatLeadId) return;
+    if (!leads.length) return;
+    setSelectedChatLeadId(leads[0].id);
+  }, [selectedModule, isChatConnected, selectedChatLeadId, leads]);
+
+  useEffect(() => {
+    if (selectedModule !== "chat") return;
+    if (!isChatConnected) return;
+    if (!selectedChatLeadId) return;
+    void loadMessagesForLead(selectedChatLeadId);
+  }, [selectedModule, isChatConnected, selectedChatLeadId, companyId]);
+
   const filteredTasks = tasks.filter((task) => {
     const lead = getLeadById(task.lead_id);
     const query = taskSearch.trim().toLowerCase();
@@ -730,6 +814,7 @@ export default function AppPage() {
 
     return matchesSearch;
   });
+
   const sortedTasks = filteredTasks.slice().sort((a, b) => {
     const dateA = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
     const dateB = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
@@ -752,6 +837,12 @@ export default function AppPage() {
     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     .slice(0, 8);
   const selectedDayEvents = selectedDay ? (eventsByDay[selectedDay] || []) : [];
+  const filteredChatLeads = leads.filter((lead) => {
+    const query = chatLeadSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (lead.name || "").toLowerCase().includes(query) || (lead.phone || "").toLowerCase().includes(query);
+  });
+  const selectedChatLead = selectedChatLeadId ? leads.find((lead) => lead.id === selectedChatLeadId) || null : null;
 
   if (!session) return null;
 
@@ -1397,7 +1488,9 @@ export default function AppPage() {
               <div>
                 <h2 className="text-2xl font-semibold text-[var(--foreground)]">Chat</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
-                  O chat so funciona quando o numero da empresa estiver conectado com a Meta.
+                  {isChatConnected
+                    ? "Chat liberado para uso."
+                    : "O chat so funciona quando o numero da empresa estiver conectado com a Meta."}
                 </p>
               </div>
 
@@ -1407,108 +1500,217 @@ export default function AppPage() {
                 </div>
               ) : null}
 
-              <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
-                <p className="text-sm font-semibold text-[var(--foreground)]">
-                  Status atual:{" "}
-                  <span className="text-[var(--primary)]">
-                    {loadingChatConnection
-                      ? "carregando..."
-                      : chatConnection?.status || "nao_configurado"}
-                  </span>
-                </p>
-                <div className="mt-4 rounded-xl border border-[var(--line)] bg-pink-50/50 p-4">
-                  <p className="text-sm font-semibold text-[var(--foreground)]">Onboarding simplificado (manual)</p>
-                  <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-[var(--muted)]">
-                    <li>Cadastre o numero comercial no CRM.</li>
-                    <li>No Meta Business Suite, conecte esse numero ao WhatsApp Business.</li>
-                    <li>Copie os IDs da Meta e cole abaixo.</li>
-                    <li>Marque como conectado para liberar o chat.</li>
-                  </ol>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <a
-                      href="https://business.facebook.com/latest/home"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs leading-8 text-[var(--foreground)]"
-                    >
-                      Abrir Meta Business Suite
-                    </a>
-                    <a
-                      href="https://business.facebook.com/latest/whatsapp_manager"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs leading-8 text-[var(--foreground)]"
-                    >
-                      Abrir WhatsApp Manager
-                    </a>
+              {isChatConnected ? (
+                <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+                  <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-sm font-semibold text-[var(--foreground)]">Conversas</p>
+                      <button
+                        onClick={() => {
+                          if (selectedChatLeadId) void loadMessagesForLead(selectedChatLeadId);
+                        }}
+                        className="rounded-lg border border-[var(--line)] px-2 py-1 text-xs text-[var(--muted)]"
+                      >
+                        Atualizar
+                      </button>
+                    </div>
+                    <input
+                      value={chatLeadSearch}
+                      onChange={(e) => setChatLeadSearch(e.target.value)}
+                      placeholder="Buscar por nome ou telefone"
+                      className="mb-3 h-10 w-full rounded-xl border border-[var(--line)] px-3 text-sm"
+                    />
+                    <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+                      {filteredChatLeads.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
+                          Nenhum lead encontrado.
+                        </p>
+                      ) : (
+                        filteredChatLeads.map((lead) => {
+                          const active = selectedChatLeadId === lead.id;
+                          return (
+                            <button
+                              key={lead.id}
+                              onClick={() => setSelectedChatLeadId(lead.id)}
+                              className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                                active
+                                  ? "border-[var(--primary)] bg-pink-50"
+                                  : "border-[var(--line)] bg-white hover:bg-pink-50/40"
+                              }`}
+                            >
+                              <p className="truncate text-sm font-semibold text-[var(--foreground)]">{lead.name || "Sem nome"}</p>
+                              <p className="truncate text-xs text-[var(--muted)]">{lead.phone}</p>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
+                    {selectedChatLead ? (
+                      <>
+                        <div className="border-b border-[var(--line)] pb-3">
+                          <p className="text-sm font-semibold text-[var(--foreground)]">{selectedChatLead.name || "Sem nome"}</p>
+                          <p className="text-xs text-[var(--muted)]">{selectedChatLead.phone}</p>
+                        </div>
+
+                        <div className="mt-3 h-[430px] space-y-2 overflow-y-auto rounded-xl border border-[var(--line)] bg-[#fffdfd] p-3">
+                          {loadingChatMessages ? (
+                            <p className="text-xs text-[var(--muted)]">Carregando mensagens...</p>
+                          ) : chatMessages.length === 0 ? (
+                            <p className="text-xs text-[var(--muted)]">Sem mensagens nesta conversa.</p>
+                          ) : (
+                            chatMessages.map((message) => {
+                              const outbound = message.direction === "outbound";
+                              return (
+                                <div key={message.id} className={`flex ${outbound ? "justify-end" : "justify-start"}`}>
+                                  <div
+                                    className={`max-w-[78%] rounded-2xl px-3 py-2 text-sm ${
+                                      outbound
+                                        ? "bg-[var(--primary)] text-white"
+                                        : "border border-[var(--line)] bg-white text-[var(--foreground)]"
+                                    }`}
+                                  >
+                                    <p className="whitespace-pre-wrap break-words">{message.content || message.body || "-"}</p>
+                                    <p className={`mt-1 text-[10px] ${outbound ? "text-white/80" : "text-[var(--muted)]"}`}>
+                                      {new Date(message.created_at).toLocaleString("pt-BR")}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {chatMessagesError ? (
+                          <p className="mt-2 text-xs text-rose-600">{chatMessagesError}</p>
+                        ) : null}
+
+                        <div className="mt-3 flex gap-2">
+                          <input
+                            value={chatText}
+                            onChange={(e) => setChatText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                void sendChatMessage();
+                              }
+                            }}
+                            placeholder="Digite uma mensagem..."
+                            className="h-11 flex-1 rounded-xl border border-[var(--line)] px-3 text-sm"
+                          />
+                          <button
+                            onClick={sendChatMessage}
+                            disabled={sendingChat || !chatText.trim()}
+                            className="h-11 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                          >
+                            Enviar
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex h-[520px] items-center justify-center rounded-xl border border-dashed border-[var(--line)] text-sm text-[var(--muted)]">
+                        Selecione uma conversa na lista ao lado.
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <input
-                    value={chatPhone}
-                    onChange={(e) => setChatPhone(e.target.value)}
-                    placeholder="+55..."
-                    className="h-11 rounded-xl border border-[var(--line)] px-3"
-                  />
-                  <input
-                    value={chatDisplayName}
-                    onChange={(e) => setChatDisplayName(e.target.value)}
-                    placeholder="Nome exibicao no WhatsApp"
-                    className="h-11 rounded-xl border border-[var(--line)] px-3"
-                  />
-                  <input
-                    value={chatMetaBusinessId}
-                    onChange={(e) => setChatMetaBusinessId(e.target.value)}
-                    placeholder="Meta business id (opcional)"
-                    className="h-11 rounded-xl border border-[var(--line)] px-3"
-                  />
-                  <input
-                    value={chatMetaPhoneId}
-                    onChange={(e) => setChatMetaPhoneId(e.target.value)}
-                    placeholder="Meta phone number id (opcional)"
-                    className="h-11 rounded-xl border border-[var(--line)] px-3"
-                  />
+              ) : (
+                <div className="rounded-2xl border border-[var(--line)] bg-white p-5">
+                  <p className="text-sm font-semibold text-[var(--foreground)]">
+                    Status atual:{" "}
+                    <span className="text-[var(--primary)]">
+                      {loadingChatConnection
+                        ? "carregando..."
+                        : chatConnection?.status || "nao_configurado"}
+                    </span>
+                  </p>
+                  <div className="mt-4 rounded-xl border border-[var(--line)] bg-pink-50/50 p-4">
+                    <p className="text-sm font-semibold text-[var(--foreground)]">Onboarding simplificado (manual)</p>
+                    <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-[var(--muted)]">
+                      <li>Cadastre o numero comercial no CRM.</li>
+                      <li>No Meta Business Suite, conecte esse numero ao WhatsApp Business.</li>
+                      <li>Copie os IDs da Meta e cole abaixo.</li>
+                      <li>Marque como conectado para liberar o chat.</li>
+                    </ol>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <a
+                        href="https://business.facebook.com/latest/home"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs leading-8 text-[var(--foreground)]"
+                      >
+                        Abrir Meta Business Suite
+                      </a>
+                      <a
+                        href="https://business.facebook.com/latest/whatsapp_manager"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs leading-8 text-[var(--foreground)]"
+                      >
+                        Abrir WhatsApp Manager
+                      </a>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <input
+                      value={chatPhone}
+                      onChange={(e) => setChatPhone(e.target.value)}
+                      placeholder="+55..."
+                      className="h-11 rounded-xl border border-[var(--line)] px-3"
+                    />
+                    <input
+                      value={chatDisplayName}
+                      onChange={(e) => setChatDisplayName(e.target.value)}
+                      placeholder="Nome exibicao no WhatsApp"
+                      className="h-11 rounded-xl border border-[var(--line)] px-3"
+                    />
+                    <input
+                      value={chatMetaBusinessId}
+                      onChange={(e) => setChatMetaBusinessId(e.target.value)}
+                      placeholder="Meta business id (opcional)"
+                      className="h-11 rounded-xl border border-[var(--line)] px-3"
+                    />
+                    <input
+                      value={chatMetaPhoneId}
+                      onChange={(e) => setChatMetaPhoneId(e.target.value)}
+                      placeholder="Meta phone number id (opcional)"
+                      className="h-11 rounded-xl border border-[var(--line)] px-3"
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void copyToClipboard(chatMetaBusinessId)}
+                      className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs"
+                    >
+                      Copiar business id
+                    </button>
+                    <button
+                      onClick={() => void copyToClipboard(chatMetaPhoneId)}
+                      className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs"
+                    >
+                      Copiar phone number id
+                    </button>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={saveChatConnection}
+                      disabled={savingChatConnection}
+                      className="h-10 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium"
+                    >
+                      Salvar e marcar pendente Meta
+                    </button>
+                    <button
+                      onClick={markChatConnected}
+                      disabled={savingChatConnection}
+                      className="h-10 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-70"
+                    >
+                      Marcar como conectado
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => void copyToClipboard(chatMetaBusinessId)}
-                    className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs"
-                  >
-                    Copiar business id
-                  </button>
-                  <button
-                    onClick={() => void copyToClipboard(chatMetaPhoneId)}
-                    className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs"
-                  >
-                    Copiar phone number id
-                  </button>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    onClick={saveChatConnection}
-                    disabled={savingChatConnection}
-                    className="h-10 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium"
-                  >
-                    Salvar e marcar pendente Meta
-                  </button>
-                  <button
-                    onClick={markChatConnected}
-                    disabled={savingChatConnection}
-                    className="h-10 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-70"
-                  >
-                    Marcar como conectado
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[var(--line)] bg-white p-5 text-sm text-[var(--muted)]">
-                <p className="font-semibold text-[var(--foreground)]">Fluxo recomendado para usuario leigo</p>
-                <ol className="mt-2 list-decimal space-y-1 pl-5">
-                  <li>Cadastre o numero comercial da empresa.</li>
-                  <li>Conecte esse numero na conta WhatsApp Business da Meta.</li>
-                  <li>Quando concluir, marque como conectado para liberar o chat.</li>
-                </ol>
-              </div>
+              )}
             </div>
           ) : (
             <div className="rounded-2xl border border-[var(--line)] bg-white p-8">
