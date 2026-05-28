@@ -13,6 +13,7 @@ const chatStatusWebhook = require('./chat/statusWebhook');
 const deprecatedEndpoint = require('./common/deprecated');
 const leadsGet = require('./leads/get');
 const leadsCreate = require('./leads/create');
+const leadsUpdateStatus = require('./leads/updateStatus');
 const eventsGet = require('./events/get');
 const eventsGetById = require('./events/getById');
 const eventsCreate = require('./events/create');
@@ -68,6 +69,7 @@ app.get('/api/v2/templates', deprecatedEndpoint('templates'));
 
 app.get('/api/v2/leads', leadsGet);
 app.post('/api/v2/leads', leadsCreate);
+app.put('/api/v2/leads/:leadId/status', leadsUpdateStatus);
 
 app.get('/api/v2/events', eventsGet);
 app.get('/api/v2/events/:eventId', eventsGetById);

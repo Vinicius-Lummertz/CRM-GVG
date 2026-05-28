@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const MASTER_PHONE = "554896290225";
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:3000";
+const API_BASE = "https://crm-gvg.onrender.com";
 
 function normalizePhone(rawValue: string) {
   const digits = (rawValue || "").replace(/\D/g, "");
