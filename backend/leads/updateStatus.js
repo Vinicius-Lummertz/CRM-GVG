@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { isValidUuid } = require('../companies/utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
+const VALID_LEAD_STATUSES = ['contato_iniciado', 'em_negociacao', 'proposta_enviada', 'orcamento_fechado'];
 
 module.exports = async (req, res) => {
     const { leadId } = req.params;
@@ -19,11 +20,19 @@ module.exports = async (req, res) => {
         return res.status(400).json({ success: false, error: "O campo 'status' e obrigatorio." });
     }
 
+    const normalizedStatus = status.trim();
+    if (!VALID_LEAD_STATUSES.includes(normalizedStatus)) {
+        return res.status(400).json({
+            success: false,
+            error: `Status invalido. Use: ${VALID_LEAD_STATUSES.join(', ')}.`
+        });
+    }
+
     try {
         const { data, error } = await supabase
             .from('leads')
             .update({
-                status: status.trim(),
+                status: normalizedStatus,
                 updated_at: new Date().toISOString()
             })
             .eq('id', leadId)

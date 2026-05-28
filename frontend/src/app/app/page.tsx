@@ -18,9 +18,10 @@ type DashboardSummary = {
     revenue: { value: number; trend_pct: number };
   };
   pipeline: {
-    possivel_cliente: number;
-    analisando_proposta: number;
-    proposta_aceita: number;
+    contato_iniciado: number;
+    em_negociacao: number;
+    proposta_enviada: number;
+    orcamento_fechado: number;
   };
   today_events: Array<{ id: string; title: string; start_time: string }>;
 };
@@ -32,14 +33,28 @@ type Lead = {
   status: string;
   updated_at: string;
 };
+type Task = {
+  id: string;
+  title: string;
+  is_completed: boolean;
+  due_date: string | null;
+  created_at: string;
+};
 
 const API_BASE = "https://crm-gvg.onrender.com";
 
-const KANBAN_COLUMNS = [
-  { id: "entrada", label: "Entrada", statuses: ["possivel_cliente", "contato_iniciado"], saveAs: "possivel_cliente" },
-  { id: "analise", label: "Analisando proposta", statuses: ["analisando_proposta"], saveAs: "analisando_proposta" },
-  { id: "aceitos", label: "Propostas aceitas", statuses: ["proposta_aceita"], saveAs: "proposta_aceita" },
-  { id: "encerrados", label: "Encerrados", statuses: ["perdido", "proposta_recusada"], saveAs: "perdido" },
+type KanbanColumn = {
+  id: string;
+  label: string;
+  statuses: string[];
+  saveAs: string | null;
+};
+
+const KANBAN_COLUMNS: KanbanColumn[] = [
+  { id: "contato", label: "Contato iniciado", statuses: ["contato_iniciado"], saveAs: "contato_iniciado" },
+  { id: "negociacao", label: "Em negociacao", statuses: ["em_negociacao"], saveAs: "em_negociacao" },
+  { id: "proposta", label: "Proposta enviada", statuses: ["proposta_enviada"], saveAs: "proposta_enviada" },
+  { id: "fechado", label: "Orcamento fechado", statuses: ["orcamento_fechado"], saveAs: "orcamento_fechado" },
 ];
 
 function formatCurrency(value: number) {
@@ -77,6 +92,12 @@ export default function AppPage() {
   const [leadName, setLeadName] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
   const [creatingLead, setCreatingLead] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [creatingTask, setCreatingTask] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("crm_session");
@@ -192,12 +213,40 @@ export default function AppPage() {
     loadLeads();
   }, [companyId]);
 
+  useEffect(() => {
+    if (!companyId) return;
+    void loadTasks(companyId);
+  }, [companyId]);
+
+  async function loadTasks(activeCompanyId: string) {
+    setLoadingTasks(true);
+    setTasksError(null);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v2/tasks?company_id=${encodeURIComponent(activeCompanyId)}`
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao carregar tasks.");
+      }
+      setTasks((data.tasks || []) as Task[]);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : "Falha ao carregar tasks.");
+    } finally {
+      setLoadingTasks(false);
+    }
+  }
+
   async function moveLead(leadId: string, targetColumnId: string) {
     if (!companyId) return;
     const target = KANBAN_COLUMNS.find((column) => column.id === targetColumnId);
     if (!target) return;
 
     const nextStatus = target.saveAs;
+    if (!nextStatus) {
+      setLeadsError("Coluna sem status de destino.");
+      return;
+    }
     const previous = leads;
     const next = leads.map((lead) =>
       lead.id === leadId ? { ...lead, status: nextStatus, updated_at: new Date().toISOString() } : lead
@@ -271,6 +320,70 @@ export default function AppPage() {
       setLeadsError(error instanceof Error ? error.message : "Falha ao criar lead.");
     } finally {
       setCreatingLead(false);
+    }
+  }
+
+  async function createTask() {
+    if (!companyId) return;
+    const title = newTaskTitle.trim();
+    if (!title) {
+      setTasksError("Informe o titulo da task.");
+      return;
+    }
+
+    setCreatingTask(true);
+    setTasksError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: companyId,
+          title,
+          due_date: newTaskDueDate || null,
+          assigned_to: profileId || null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao criar task.");
+      }
+
+      setNewTaskTitle("");
+      setNewTaskDueDate("");
+      await loadTasks(companyId);
+    } catch (error) {
+      setTasksError(error instanceof Error ? error.message : "Falha ao criar task.");
+    } finally {
+      setCreatingTask(false);
+    }
+  }
+
+  async function toggleTask(task: Task) {
+    if (!companyId) return;
+
+    const previous = tasks;
+    const next = tasks.map((item) =>
+      item.id === task.id ? { ...item, is_completed: !item.is_completed } : item
+    );
+    setTasks(next);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/tasks/${task.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: companyId,
+          is_completed: !task.is_completed,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao atualizar task.");
+      }
+    } catch (error) {
+      setTasks(previous);
+      setTasksError(error instanceof Error ? error.message : "Falha ao atualizar task.");
     }
   }
 
@@ -411,19 +524,23 @@ export default function AppPage() {
               <div className="grid gap-4 xl:grid-cols-3">
                 <article className="rounded-2xl border border-[var(--line)] bg-white p-5 xl:col-span-2">
                   <p className="text-sm font-medium text-[var(--foreground)]">Pipeline rapido</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     {[
                       {
-                        stage: "Possivel cliente",
-                        qty: summary?.pipeline.possivel_cliente ?? 0,
+                        stage: "Contato iniciado",
+                        qty: summary?.pipeline.contato_iniciado ?? 0,
                       },
                       {
-                        stage: "Analisando proposta",
-                        qty: summary?.pipeline.analisando_proposta ?? 0,
+                        stage: "Em negociacao",
+                        qty: summary?.pipeline.em_negociacao ?? 0,
                       },
                       {
-                        stage: "Proposta aceita",
-                        qty: summary?.pipeline.proposta_aceita ?? 0,
+                        stage: "Proposta enviada",
+                        qty: summary?.pipeline.proposta_enviada ?? 0,
+                      },
+                      {
+                        stage: "Orcamento fechado",
+                        qty: summary?.pipeline.orcamento_fechado ?? 0,
                       },
                     ].map((item) => (
                       <div key={item.stage} className="rounded-xl bg-pink-50 p-4">
@@ -562,6 +679,105 @@ export default function AppPage() {
                   </div>
                 </div>
               ) : null}
+            </div>
+          ) : selectedModule === "tasks" ? (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-2xl font-semibold text-[var(--foreground)]">Tasks</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Lista inteligente para manter rotina e entregas em dia.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_20px_35px_-30px_rgba(230,57,120,0.35)]">
+                <div className="grid gap-3 md:grid-cols-[1fr_190px_auto]">
+                  <input
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    placeholder="Nova task..."
+                    className="h-11 rounded-xl border border-[var(--line)] px-3"
+                  />
+                  <input
+                    type="datetime-local"
+                    value={newTaskDueDate}
+                    onChange={(e) => setNewTaskDueDate(e.target.value)}
+                    className="h-11 rounded-xl border border-[var(--line)] px-3"
+                  />
+                  <button
+                    onClick={createTask}
+                    disabled={creatingTask}
+                    className="h-11 rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-white disabled:opacity-70"
+                  >
+                    {creatingTask ? "Salvando..." : "Adicionar"}
+                  </button>
+                </div>
+              </div>
+
+              {tasksError ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {tasksError}
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
+                  <p className="mb-3 text-sm font-semibold text-[var(--foreground)]">Pendentes</p>
+                  <div className="space-y-2">
+                    {loadingTasks ? (
+                      <div className="rounded-xl bg-pink-50 px-3 py-4 text-sm text-[var(--muted)]">Carregando...</div>
+                    ) : tasks.filter((t) => !t.is_completed).length === 0 ? (
+                      <div className="rounded-xl bg-pink-50 px-3 py-4 text-sm text-[var(--muted)]">Sem tasks pendentes.</div>
+                    ) : (
+                      tasks
+                        .filter((t) => !t.is_completed)
+                        .map((task) => (
+                          <label key={task.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-pink-100 bg-pink-50/60 px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={task.is_completed}
+                              onChange={() => toggleTask(task)}
+                              className="mt-1 h-4 w-4 accent-[var(--primary)]"
+                            />
+                            <div>
+                              <p className="text-sm font-medium text-[var(--foreground)]">{task.title}</p>
+                              <p className="text-xs text-[var(--muted)]">
+                                {task.due_date ? new Date(task.due_date).toLocaleString("pt-BR") : "-"}
+                              </p>
+                            </div>
+                          </label>
+                        ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
+                  <p className="mb-3 text-sm font-semibold text-[var(--foreground)]">Concluidas</p>
+                  <div className="space-y-2">
+                    {tasks.filter((t) => t.is_completed).length === 0 ? (
+                      <div className="rounded-xl bg-pink-50 px-3 py-4 text-sm text-[var(--muted)]">Sem tasks concluidas.</div>
+                    ) : (
+                      tasks
+                        .filter((t) => t.is_completed)
+                        .map((task) => (
+                          <label key={task.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-pink-100 bg-white px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={task.is_completed}
+                              onChange={() => toggleTask(task)}
+                              className="mt-1 h-4 w-4 accent-[var(--primary)]"
+                            />
+                            <div>
+                              <p className="text-sm font-medium text-[var(--muted)] line-through">{task.title}</p>
+                              <p className="text-xs text-[var(--muted)]">
+                                {task.due_date ? new Date(task.due_date).toLocaleString("pt-BR") : "-"}
+                              </p>
+                            </div>
+                          </label>
+                        ))
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-[var(--line)] bg-white p-8">

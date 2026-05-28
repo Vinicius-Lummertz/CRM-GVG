@@ -82,7 +82,7 @@ module.exports = async (req, res) => {
         leadRows.forEach((lead) => {
             const createdAt = lead.created_at ? new Date(lead.created_at) : null;
             const updatedAt = lead.updated_at ? new Date(lead.updated_at) : null;
-            const accepted = lead.status === 'proposta_aceita';
+            const accepted = lead.status === 'orcamento_fechado';
 
             if (createdAt && createdAt >= currentFrom && createdAt <= now) {
                 metrics.leads_active += 1;
@@ -112,9 +112,10 @@ module.exports = async (req, res) => {
         });
 
         const pipeline = {
-            possivel_cliente: 0,
-            analisando_proposta: 0,
-            proposta_aceita: 0
+            contato_iniciado: 0,
+            em_negociacao: 0,
+            proposta_enviada: 0,
+            orcamento_fechado: 0
         };
 
         leadRows.forEach((lead) => {

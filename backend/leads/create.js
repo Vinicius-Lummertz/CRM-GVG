@@ -102,6 +102,7 @@ module.exports = async (req, res) => {
                 company_id,
                 name: trimmedName,
                 phone: normalizedPhone.phone,
+                status: 'contato_iniciado',
                 assigned_to: assigned_to || null,
                 created_at: now,
                 updated_at: now
