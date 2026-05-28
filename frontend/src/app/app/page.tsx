@@ -698,6 +698,7 @@ export default function AppPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "conectado",
+          phone_number: chatPhone || null,
           meta_business_id: chatMetaBusinessId || null,
           meta_phone_number_id: chatMetaPhoneId || null
         })

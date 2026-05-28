@@ -1,6 +1,7 @@
 const {
     extractConnection,
     fetchCompany,
+    normalizeE164Phone,
     supabase,
     VALID_CONNECTION_STATUSES
 } = require('./utils');
@@ -24,7 +25,15 @@ module.exports = async (req, res) => {
     const currentConnection = extractConnection(fetched.company);
     const nextMetaBusinessId = req.body.meta_business_id ? String(req.body.meta_business_id) : (currentConnection.meta_business_id || null);
     const nextMetaPhoneNumberId = req.body.meta_phone_number_id ? String(req.body.meta_phone_number_id) : (currentConnection.meta_phone_number_id || null);
-    const nextPhone = currentConnection.phone_number || null;
+
+    let nextPhone = currentConnection.phone_number || null;
+    if (req.body.phone_number !== undefined) {
+        const normalizedPhone = normalizeE164Phone(req.body.phone_number, 'phone_number');
+        if (normalizedPhone.error) {
+            return res.status(400).json({ success: false, error: normalizedPhone.error });
+        }
+        nextPhone = normalizedPhone.value;
+    }
 
     if (status === 'conectado') {
         if (!nextPhone || !nextMetaBusinessId || !nextMetaPhoneNumberId) {
@@ -38,6 +47,7 @@ module.exports = async (req, res) => {
     const nextConnection = {
         ...currentConnection,
         status,
+        phone_number: nextPhone,
         meta_business_id: nextMetaBusinessId,
         meta_phone_number_id: nextMetaPhoneNumberId,
         last_error: req.body.last_error ? String(req.body.last_error) : null,
