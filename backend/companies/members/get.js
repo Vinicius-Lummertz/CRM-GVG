@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
 
         const { data: members, error } = await supabase
             .from('company_members')
-            .select('*, profile:profiles(id, full_name, login_phone, avatar_url)')
+            .select('*, profile:profiles(id, full_name, phone, avatar_url)')
             .eq('company_id', companyId)
             .order('joined_at', { ascending: true });
 

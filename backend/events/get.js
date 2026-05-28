@@ -1,7 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
 const {
-    VALID_RELATED_TYPES,
-    VALID_STATUSES,
     isValidUuid,
     parseOptionalString
 } = require('./utils');
@@ -19,58 +17,16 @@ function parseDateFilter(value, fieldName) {
     return { value: date.toISOString() };
 }
 
-async function attachAttendees(events) {
-    if (!events || events.length === 0) return [];
-
-    const eventIds = events.map((event) => event.id);
-    const { data: attendees, error } = await supabase
-        .from('event_attendees')
-        .select('*')
-        .in('event_id', eventIds)
-        .order('full_name', { ascending: true });
-
-    if (error) throw error;
-
-    const attendeesByEvent = new Map();
-    (attendees || []).forEach((attendee) => {
-        if (!attendeesByEvent.has(attendee.event_id)) {
-            attendeesByEvent.set(attendee.event_id, []);
-        }
-        attendeesByEvent.get(attendee.event_id).push(attendee);
-    });
-
-    return events.map((event) => ({
-        ...event,
-        attendees: attendeesByEvent.get(event.id) || []
-    }));
-}
-
 module.exports = async (req, res) => {
     const companyId = parseOptionalString(req.query.company_id);
-    const userId = parseOptionalString(req.query.user_id);
-    const status = parseOptionalString(req.query.status);
-    const relatedType = parseOptionalString(req.query.related_type);
-    const relatedId = parseOptionalString(req.query.related_id);
-    const includeAttendees = req.query.include_attendees !== 'false';
+    const leadId = parseOptionalString(req.query.lead_id);
 
     if (!companyId || !isValidUuid(companyId)) {
         return res.status(400).json({ success: false, error: "Parametro 'company_id' e obrigatorio e deve ser um UUID valido." });
     }
 
-    if (userId && !isValidUuid(userId)) {
-        return res.status(400).json({ success: false, error: "Parametro 'user_id' deve ser um UUID valido." });
-    }
-
-    if (status && !VALID_STATUSES.includes(status)) {
-        return res.status(400).json({ success: false, error: `Status invalido. Use: ${VALID_STATUSES.join(', ')}.` });
-    }
-
-    if (relatedType && !VALID_RELATED_TYPES.includes(relatedType)) {
-        return res.status(400).json({ success: false, error: `Tipo relacionado invalido. Use: ${VALID_RELATED_TYPES.join(', ')}.` });
-    }
-
-    if (relatedId && !isValidUuid(relatedId)) {
-        return res.status(400).json({ success: false, error: "Parametro 'related_id' deve ser um UUID valido." });
+    if (leadId && !isValidUuid(leadId)) {
+        return res.status(400).json({ success: false, error: "Parametro 'lead_id' deve ser um UUID valido." });
     }
 
     const from = parseDateFilter(req.query.from, 'from');
@@ -84,7 +40,7 @@ module.exports = async (req, res) => {
     }
 
     try {
-        console.log(`[CRM] Buscando eventos | company_id=${companyId} | user_id=${userId || '[todos]'}`);
+        console.log(`[CRM] Buscando eventos | company_id=${companyId} | lead_id=${leadId || '[todos]'}`);
 
         let query = supabase
             .from('events')
@@ -92,17 +48,14 @@ module.exports = async (req, res) => {
             .eq('company_id', companyId)
             .order('start_time', { ascending: true });
 
-        if (userId) query = query.eq('user_id', userId);
-        if (status) query = query.eq('status', status);
-        if (relatedType) query = query.eq('related_type', relatedType);
-        if (relatedId) query = query.eq('related_id', relatedId);
+        if (leadId) query = query.eq('lead_id', leadId);
         if (from.value) query = query.gte('end_time', from.value);
         if (to.value) query = query.lte('start_time', to.value);
 
         const { data: events, error: fetchError } = await query;
         if (fetchError) throw fetchError;
 
-        const responseEvents = includeAttendees ? await attachAttendees(events || []) : (events || []);
+        const responseEvents = events || [];
 
         return res.status(200).json({
             success: true,

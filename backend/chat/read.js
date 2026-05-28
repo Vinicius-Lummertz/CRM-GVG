@@ -27,8 +27,6 @@ module.exports = async (req, res) => {
         const { data, error } = await supabase
             .from('leads')
             .update({
-                unread_count: 0,
-                messages_after_last_resume: 0,
                 updated_at: new Date().toISOString()
             })
             .eq('id', leadId)

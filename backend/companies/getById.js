@@ -36,8 +36,7 @@ module.exports = async (req, res) => {
                 .from('company_members')
                 .select('*')
                 .eq('company_id', companyId)
-                .eq('user_id', user_id)
-                .eq('status', 'active')
+                .eq('profile_id', user_id)
                 .maybeSingle();
 
             if (membershipError) throw membershipError;
@@ -49,27 +48,18 @@ module.exports = async (req, res) => {
             company.membership = membership;
         }
 
-        const [{ data: whatsappNumbers, error: numbersError }, { data: members, error: membersError }] = await Promise.all([
-            supabase
-                .from('company_whatsapp_numbers')
-                .select('*')
-                .eq('company_id', companyId)
-                .order('created_at', { ascending: true }),
-            supabase
+        const { data: members, error: membersError } = await supabase
                 .from('company_members')
-                .select('*, profile:profiles(id, full_name, login_phone, avatar_url)')
+                .select('*, profile:profiles(id, full_name, phone, avatar_url)')
                 .eq('company_id', companyId)
-                .order('joined_at', { ascending: true })
-        ]);
+                .order('joined_at', { ascending: true });
 
-        if (numbersError) throw numbersError;
         if (membersError) throw membersError;
 
         return res.status(200).json({
             success: true,
             company: {
                 ...company,
-                whatsapp_numbers: whatsappNumbers || [],
                 members: members || []
             }
         });

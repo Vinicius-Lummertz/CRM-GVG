@@ -49,7 +49,6 @@ module.exports = async (req, res) => {
         let query = supabase
             .from('messages')
             .select('*')
-            .eq('company_id', companyId)
             .eq('lead_id', leadId)
             .order('created_at', { ascending: false })
             .limit(limit + 1);

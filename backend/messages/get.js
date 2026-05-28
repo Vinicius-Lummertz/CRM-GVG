@@ -16,9 +16,9 @@ async function resolveCompanyWhatsappNumber(rawTo) {
     if (!phoneNumber) return null;
 
     const { data, error } = await supabase
-        .from('company_whatsapp_numbers')
-        .select('id, company_id, phone_number')
-        .eq('phone_number', phoneNumber)
+        .from('companies')
+        .select('id, commercial_phone')
+        .eq('commercial_phone', phoneNumber)
         .limit(1);
 
     if (error) throw error;
@@ -46,8 +46,8 @@ module.exports = async (req, res) => {
         const { data: existingLeads, error: findError } = await supabase
             .from('leads')
             .select('*')
-            .eq('company_id', companyWhatsappNumber.company_id)
-            .eq('external_key', From)
+            .eq('company_id', companyWhatsappNumber.id)
+            .eq('phone', normalizeWebhookPhone(From))
             .limit(1);
 
         if (findError) throw findError;
@@ -60,49 +60,29 @@ module.exports = async (req, res) => {
                 .from('leads')
                 .update({
                     name: (ProfileName && lead.name === 'Sem nome') ? ProfileName : lead.name,
-                    whatsapp_number_id: lead.whatsapp_number_id || companyWhatsappNumber.id,
-                    last_message: Body,
-                    last_message_preview: Body ? Body.substring(0, 50) : '',
-                    last_message_at: now,
-                    last_inbound_at: now,
                     updated_at: now,
-                    unread_count: Number(lead.unread_count || 0) + 1,
-                    message_count_total: Number(lead.message_count_total || 0) + 1,
-                    inbound_count: Number(lead.inbound_count || 0) + 1,
-                    messages_after_last_resume: Number(lead.messages_after_last_resume || 0) + 1
+                    last_conversation_summary: Body || lead.last_conversation_summary
                 })
                 .eq('id', leadId)
-                .eq('company_id', companyWhatsappNumber.company_id);
+                .eq('company_id', companyWhatsappNumber.id);
 
             if (updateError) console.error("Erro ao atualizar lead existente:", updateError);
             else console.log(`[CRM] Lead atualizado no banco. ID: ${leadId}`);
         } else {
             leadId = crypto.randomUUID();
 
-            const phoneOnly = From.replace('whatsapp:', '');
-            const waId = phoneOnly.replace('+', '');
+            const phoneOnly = normalizeWebhookPhone(From);
 
             const { error: insertError } = await supabase
                 .from('leads')
                 .insert([{
                     id: leadId,
-                    company_id: companyWhatsappNumber.company_id,
-                    whatsapp_number_id: companyWhatsappNumber.id,
-                    external_key: From,
+                    company_id: companyWhatsappNumber.id,
                     phone: phoneOnly,
-                    whatsapp_from: From,
-                    wa_id: waId,
                     name: ProfileName || 'Sem nome',
-                    last_message: Body,
-                    last_message_preview: Body ? Body.substring(0, 50) : '',
-                    last_message_at: now,
-                    last_inbound_at: now,
+                    last_conversation_summary: Body || null,
                     created_at: now,
-                    updated_at: now,
-                    unread_count: 1,
-                    message_count_total: 1,
-                    inbound_count: 1,
-                    messages_after_last_resume: 1
+                    updated_at: now
                 }]);
 
             if (insertError) throw insertError;
@@ -114,17 +94,12 @@ module.exports = async (req, res) => {
             .from('messages')
             .insert([{
                 id: messageId,
-                company_id: companyWhatsappNumber.company_id,
-                whatsapp_number_id: companyWhatsappNumber.id,
                 lead_id: leadId,
-                message_sid: MessageSid,
-                provider_message_id: MessageSid,
+                sender_id: null,
                 direction: 'inbound',
-                body: Body,
-                preview: Body ? Body.substring(0, 50) : '',
-                message_type: 'text',
-                sent_by_customer: 1,
-                delivery_status: 'received',
+                content: Body || '',
+                has_media: false,
+                media_url: null,
                 created_at: now
             }]);
 
@@ -133,6 +108,15 @@ module.exports = async (req, res) => {
         } else {
             console.log(`[CRM] Mensagem armazenada e linkada ao Lead ${leadId}`);
         }
+
+        await supabase
+            .from('leads')
+            .update({
+                updated_at: now,
+                last_conversation_summary: Body || null
+            })
+            .eq('id', leadId)
+            .eq('company_id', companyWhatsappNumber.id);
     } catch (dbError) {
         console.error("Erro ao processar as acoes de banco de dados no webhook:", dbError);
     }

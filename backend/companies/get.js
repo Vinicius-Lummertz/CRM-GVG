@@ -3,33 +3,12 @@ const { isValidUuid } = require('./utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
-async function attachWhatsappNumbers(companies) {
-    if (!companies || companies.length === 0) return [];
-
-    const companyIds = companies.map((item) => item.company.id);
-    const { data: numbers, error } = await supabase
-        .from('company_whatsapp_numbers')
-        .select('*')
-        .in('company_id', companyIds)
-        .order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    const numbersByCompany = new Map();
-    (numbers || []).forEach((number) => {
-        if (!numbersByCompany.has(number.company_id)) {
-            numbersByCompany.set(number.company_id, []);
-        }
-        numbersByCompany.get(number.company_id).push(number);
-    });
-
-    return companies.map((item) => ({
+function mapMemberships(companies) {
+    return (companies || []).map((item) => ({
         ...item.company,
         membership_id: item.id,
         role: item.role,
-        member_status: item.status,
-        joined_at: item.joined_at,
-        whatsapp_numbers: numbersByCompany.get(item.company.id) || []
+        joined_at: item.joined_at
     }));
 }
 
@@ -45,14 +24,13 @@ module.exports = async (req, res) => {
 
         const { data: memberships, error } = await supabase
             .from('company_members')
-            .select('id, role, status, joined_at, company:companies(*)')
-            .eq('user_id', user_id)
-            .eq('status', 'active')
+            .select('id, role, joined_at, company:companies(*)')
+            .eq('profile_id', user_id)
             .order('joined_at', { ascending: true });
 
         if (error) throw error;
 
-        const companies = await attachWhatsappNumbers(memberships || []);
+        const companies = mapMemberships(memberships);
 
         return res.status(200).json({
             success: true,

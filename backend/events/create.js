@@ -22,43 +22,18 @@ module.exports = async (req, res) => {
             .insert([{
                 id: eventId,
                 ...validation.payload,
-                created_at: now,
-                updated_at: now
+                created_at: now
             }])
             .select('*')
             .single();
 
         if (insertError) throw insertError;
 
-        const attendees = validation.attendees || [];
-        if (attendees.length > 0) {
-            const { error: attendeesError } = await supabase
-                .from('event_attendees')
-                .insert(attendees.map((attendee) => ({
-                    id: crypto.randomUUID(),
-                    event_id: eventId,
-                    ...attendee
-                })));
-
-            if (attendeesError) throw attendeesError;
-        }
-
-        const { data: savedAttendees, error: fetchAttendeesError } = await supabase
-            .from('event_attendees')
-            .select('*')
-            .eq('event_id', eventId)
-            .order('full_name', { ascending: true });
-
-        if (fetchAttendeesError) throw fetchAttendeesError;
-
         console.log(`[CRM] Evento criado com sucesso! ID: ${eventId}`);
         return res.status(201).json({
             success: true,
             eventId,
-            event: {
-                ...event,
-                attendees: savedAttendees || []
-            },
+            event,
             message: "Evento criado com sucesso!"
         });
     } catch (error) {

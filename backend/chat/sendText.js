@@ -84,17 +84,12 @@ module.exports = async (req, res) => {
             .from('messages')
             .insert([{
                 id: messageId,
-                company_id,
-                whatsapp_number_id: lead.whatsapp_number_id || null,
                 lead_id,
-                message_sid: message.sid,
-                provider_message_id: message.sid,
                 direction: 'outbound',
-                body: normalizedText.text,
-                preview: getPreview(normalizedText.text),
-                message_type: 'text',
-                sent_by_customer: 0,
-                delivery_status: 'sent',
+                content: normalizedText.text,
+                has_media: false,
+                media_url: null,
+                sender_id: null,
                 created_at: now
             }]);
 
@@ -110,11 +105,8 @@ module.exports = async (req, res) => {
         const { error: updateError } = await supabase
             .from('leads')
             .update({
-                last_message: normalizedText.text,
-                last_message_preview: getPreview(normalizedText.text),
-                last_message_at: now,
                 updated_at: now,
-                message_count_total: Number(lead.message_count_total || 0) + 1
+                last_conversation_summary: getPreview(normalizedText.text)
             })
             .eq('id', lead_id)
             .eq('company_id', company_id);

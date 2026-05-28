@@ -4,7 +4,7 @@ const { normalizePhone } = require('../companies/utils');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
 module.exports = async (req, res) => {
-    const loginPhone = normalizePhone(req.query.login_phone, 'login_phone');
+    const loginPhone = normalizePhone(req.query.phone, 'phone');
 
     if (loginPhone.error) {
         return res.status(400).json({ success: false, error: loginPhone.error });
@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
         const { data: profile, error } = await supabase
             .from('profiles')
             .select('*')
-            .eq('login_phone', loginPhone.value)
+            .eq('phone', loginPhone.value)
             .maybeSingle();
 
         if (error) throw error;

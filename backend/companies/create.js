@@ -6,9 +6,14 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SEC
 
 module.exports = async (req, res) => {
     const name = parseRequiredString(req.body.name, 'name');
-    const { owner_id } = req.body;
+    const commercialPhone = parseRequiredString(req.body.commercial_phone, 'commercial_phone');
+    const { owner_id, company_settings } = req.body;
 
     if (name.error) return res.status(400).json({ success: false, error: name.error });
+
+    if (!commercialPhone.value) {
+        return res.status(400).json({ success: false, error: "O campo 'commercial_phone' e obrigatorio." });
+    }
 
     if (!owner_id || !isValidUuid(owner_id)) {
         return res.status(400).json({ success: false, error: "O campo 'owner_id' deve ser um UUID valido." });
@@ -24,7 +29,8 @@ module.exports = async (req, res) => {
             .insert([{
                 id: companyId,
                 name: name.value,
-                owner_id
+                commercial_phone: commercialPhone.value,
+                company_settings: company_settings && typeof company_settings === 'object' ? company_settings : {}
             }])
             .select('*')
             .single();
@@ -36,9 +42,8 @@ module.exports = async (req, res) => {
             .insert([{
                 id: crypto.randomUUID(),
                 company_id: companyId,
-                user_id: owner_id,
-                role: 'owner',
-                status: 'active'
+                profile_id: owner_id,
+                role: 'owner'
             }]);
 
         if (memberError) throw memberError;
@@ -48,8 +53,7 @@ module.exports = async (req, res) => {
             companyId,
             company: {
                 ...company,
-                role: 'owner',
-                whatsapp_numbers: []
+                role: 'owner'
             },
             message: "Empresa criada com sucesso!"
         });

@@ -29,8 +29,6 @@ function normalizeToWhatsAppPhone(rawPhone) {
 
 function resolveLeadPhone(lead, fallbackPhone) {
     const candidates = [
-        lead && lead.whatsapp_from,
-        lead && lead.external_key,
         lead && lead.phone,
         fallbackPhone
     ].filter(Boolean);
@@ -68,7 +66,7 @@ function getPreview(body) {
 }
 
 function buildConversationWindow(lead, referenceDate = new Date()) {
-    const lastInboundAt = lead && lead.last_inbound_at ? new Date(lead.last_inbound_at) : null;
+    const lastInboundAt = lead && lead.updated_at ? new Date(lead.updated_at) : null;
 
     if (!lastInboundAt || Number.isNaN(lastInboundAt.getTime())) {
         return {

@@ -6,33 +6,12 @@ const {
     getPreview,
     mapTwilioChatError,
     parseContentVariables,
-    renderTemplateBody,
-    resolveLeadPhone,
-    validateTemplateVariables
+    resolveLeadPhone
 } = require('./utils');
 const { isValidUuid } = require('../companies/utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_ACCOUNT_AUTH_TOKEN);
-
-async function fetchTemplate(companyId, templateId, contentSid) {
-    let query = supabase
-        .from('templates')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('is_active', 1)
-        .limit(1);
-
-    if (templateId) {
-        query = query.eq('id', templateId);
-    } else {
-        query = query.eq('content_sid', contentSid);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return data && data.length > 0 ? data[0] : null;
-}
 
 module.exports = async (req, res) => {
     const {
@@ -56,57 +35,19 @@ module.exports = async (req, res) => {
         return res.status(400).json({ success: false, error: "O campo 'company_id' deve ser um UUID valido." });
     }
 
-    if (!template_id && !content_sid) {
-        return res.status(400).json({
-            success: false,
-            error: "Informe 'template_id' ou 'content_sid'."
-        });
-    }
-
-    const parsedVariables = parseContentVariables(
-        contentVariables !== undefined ? contentVariables : variables
-    );
-
-    if (!parsedVariables) {
-        return res.status(400).json({
-            success: false,
-            error: "Variaveis de template invalidas. Envie um objeto JSON valido."
-        });
-    }
+    const parsedVariables = parseContentVariables(contentVariables !== undefined ? contentVariables : variables);
 
     try {
-        const [{ data: leads, error: leadError }, template] = await Promise.all([
-            supabase
-                .from('leads')
-                .select('*')
-                .eq('id', lead_id)
-                .eq('company_id', company_id)
-                .limit(1),
-            fetchTemplate(company_id, template_id, content_sid)
-        ]);
+        const { data: leads, error: leadError } = await supabase
+            .from('leads')
+            .select('*')
+            .eq('id', lead_id)
+            .eq('company_id', company_id)
+            .limit(1);
 
         if (leadError) throw leadError;
         if (!leads || leads.length === 0) {
             return res.status(404).json({ success: false, error: "Lead nao encontrado." });
-        }
-
-        if (!template) {
-            return res.status(404).json({ success: false, error: "Template ativo nao encontrado." });
-        }
-
-        if (!template.content_sid) {
-            return res.status(400).json({
-                success: false,
-                error: "Template sem content_sid cadastrado."
-            });
-        }
-
-        const variableValidation = validateTemplateVariables(template.body, parsedVariables);
-        if (!variableValidation.valid) {
-            return res.status(400).json({
-                success: false,
-                error: variableValidation.error
-            });
         }
 
         const lead = leads[0];
@@ -115,19 +56,24 @@ module.exports = async (req, res) => {
             return res.status(400).json({ success: false, error: normalizedPhone.error });
         }
 
-        const messageId = crypto.randomUUID();
-        const now = new Date().toISOString();
-        const renderedBody = renderTemplateBody(template.body, parsedVariables);
+        if (!content_sid) {
+            return res.status(400).json({
+                success: false,
+                error: "No schema atual, envie 'content_sid' diretamente para disparar templates."
+            });
+        }
 
-        console.log(`[CRM] Enviando template ${template.name} para lead ${lead_id}`);
+        const renderedBody = parsedVariables ? JSON.stringify(parsedVariables) : content_sid;
+
+        console.log(`[CRM] Enviando template content_sid=${content_sid} para lead ${lead_id}`);
 
         const twilioPayload = {
-            contentSid: template.content_sid,
+            contentSid: content_sid,
             from: process.env.TWILIO_WHATSAPP_NUMBER,
             to: normalizedPhone.whatsapp
         };
 
-        if (Object.keys(parsedVariables).length > 0) {
+        if (parsedVariables && Object.keys(parsedVariables).length > 0) {
             twilioPayload.contentVariables = JSON.stringify(parsedVariables);
         }
 
@@ -137,21 +83,19 @@ module.exports = async (req, res) => {
 
         const message = await client.messages.create(twilioPayload);
 
+        const messageId = crypto.randomUUID();
+        const now = new Date().toISOString();
+
         const { error: insertError } = await supabase
             .from('messages')
             .insert([{
                 id: messageId,
-                company_id,
-                whatsapp_number_id: lead.whatsapp_number_id || null,
                 lead_id,
-                message_sid: message.sid,
-                provider_message_id: message.sid,
                 direction: 'outbound',
-                body: renderedBody,
-                preview: getPreview(renderedBody),
-                message_type: 'template',
-                sent_by_customer: 0,
-                delivery_status: 'sent',
+                content: renderedBody,
+                has_media: false,
+                media_url: null,
+                sender_id: null,
                 created_at: now
             }]);
 
@@ -167,11 +111,8 @@ module.exports = async (req, res) => {
         const { error: updateError } = await supabase
             .from('leads')
             .update({
-                last_message: renderedBody,
-                last_message_preview: getPreview(renderedBody),
-                last_message_at: now,
                 updated_at: now,
-                message_count_total: Number(lead.message_count_total || 0) + 1
+                last_conversation_summary: getPreview(renderedBody)
             })
             .eq('id', lead_id)
             .eq('company_id', company_id);
@@ -184,7 +125,7 @@ module.exports = async (req, res) => {
             success: true,
             chatMessageId: messageId,
             providerMessageId: message.sid,
-            templateId: template.id,
+            templateId: template_id || null,
             conversation_window: buildConversationWindow(lead),
             message: "Template enviado com sucesso!"
         });

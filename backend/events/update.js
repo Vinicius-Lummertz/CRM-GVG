@@ -1,5 +1,4 @@
 const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
 const { isValidUuid, validateEventPayload } = require('./utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
@@ -51,8 +50,7 @@ module.exports = async (req, res) => {
         }
 
         const updatePayload = {
-            ...validation.payload,
-            updated_at: new Date().toISOString()
+            ...validation.payload
         };
 
         const { data: event, error: updateError } = await supabase
@@ -65,41 +63,9 @@ module.exports = async (req, res) => {
 
         if (updateError) throw updateError;
 
-        if (validation.attendees !== undefined) {
-            const { error: deleteAttendeesError } = await supabase
-                .from('event_attendees')
-                .delete()
-                .eq('event_id', eventId);
-
-            if (deleteAttendeesError) throw deleteAttendeesError;
-
-            if (validation.attendees.length > 0) {
-                const { error: insertAttendeesError } = await supabase
-                    .from('event_attendees')
-                    .insert(validation.attendees.map((attendee) => ({
-                        id: crypto.randomUUID(),
-                        event_id: eventId,
-                        ...attendee
-                    })));
-
-                if (insertAttendeesError) throw insertAttendeesError;
-            }
-        }
-
-        const { data: attendees, error: attendeesError } = await supabase
-            .from('event_attendees')
-            .select('*')
-            .eq('event_id', eventId)
-            .order('full_name', { ascending: true });
-
-        if (attendeesError) throw attendeesError;
-
         return res.status(200).json({
             success: true,
-            event: {
-                ...event,
-                attendees: attendees || []
-            },
+            event,
             message: "Evento atualizado com sucesso!"
         });
     } catch (error) {

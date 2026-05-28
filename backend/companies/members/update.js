@@ -1,7 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const {
     VALID_MEMBER_ROLES,
-    VALID_MEMBER_STATUSES,
     isValidUuid,
     parseOptionalString
 } = require('../utils');
@@ -24,14 +23,6 @@ module.exports = async (req, res) => {
         payload.role = role;
     }
 
-    if (req.body.status !== undefined) {
-        const status = parseOptionalString(req.body.status);
-        if (!VALID_MEMBER_STATUSES.includes(status)) {
-            return res.status(400).json({ success: false, error: `Status invalido. Use: ${VALID_MEMBER_STATUSES.join(', ')}.` });
-        }
-        payload.status = status;
-    }
-
     if (Object.keys(payload).length === 0) {
         return res.status(400).json({ success: false, error: "Informe ao menos um campo para atualizar." });
     }
@@ -44,7 +35,7 @@ module.exports = async (req, res) => {
             .update(payload)
             .eq('id', memberId)
             .eq('company_id', companyId)
-            .select('*, profile:profiles(id, full_name, login_phone, avatar_url)')
+            .select('*, profile:profiles(id, full_name, phone, avatar_url)')
             .maybeSingle();
 
         if (error) throw error;

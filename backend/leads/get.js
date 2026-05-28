@@ -67,8 +67,6 @@ async function fetchLeadsByNumber(companyId, searchCandidates) {
     const filters = [];
     searchCandidates.forEach((digits) => {
         filters.push(`phone.ilike.%${digits}%`);
-        filters.push(`external_key.ilike.%${digits}%`);
-        filters.push(`wa_id.ilike.%${digits}%`);
     });
 
     const { data, error } = await supabase
