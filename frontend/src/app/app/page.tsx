@@ -812,7 +812,7 @@ export default function AppPage() {
     setTemplatesError(null);
     try {
       const response = await fetch(
-        `${API_BASE}/api/v2/templates?company_id=${encodeURIComponent(activeCompanyId)}`
+        `${API_BASE}/api/v2/templates?company_id=${encodeURIComponent(activeCompanyId)}&name=${encodeURIComponent("restart_conversa")}&limit=5`
       );
       const data = await response.json();
       if (!response.ok || !data.success) {
@@ -829,7 +829,7 @@ export default function AppPage() {
 
   async function sendRestartTemplate() {
     if (!companyId || !selectedChatLeadId || !selectedChatLead) return;
-    const template = templates.find((item) => item.name === "restart_conversa");
+    const template = templates.find((item) => (item.name || "").trim().toLowerCase() === "restart_conversa");
     if (!template) return;
 
     setSendingChat(true);
@@ -1688,14 +1688,14 @@ export default function AppPage() {
                               disabled={
                                 sendingChat ||
                                 loadingTemplates ||
-                                !templates.some((template) => template.name === "restart_conversa")
+                                !templates.some((template) => (template.name || "").trim().toLowerCase() === "restart_conversa")
                               }
                               className="mt-2 h-10 rounded-xl border border-amber-300 bg-white px-3 text-sm font-medium text-amber-800 disabled:opacity-60"
                             >
                               Enviar mensagem de abertura
                             </button>
                             {templatesError ? <p className="mt-2 text-xs text-rose-600">{templatesError}</p> : null}
-                            {!loadingTemplates && !templates.some((template) => template.name === "restart_conversa") ? (
+                            {!loadingTemplates && !templates.some((template) => (template.name || "").trim().toLowerCase() === "restart_conversa") ? (
                               <p className="mt-2 text-xs text-rose-600">
                                 Template obrigatorio `restart_conversa` nao encontrado para esta empresa.
                               </p>
