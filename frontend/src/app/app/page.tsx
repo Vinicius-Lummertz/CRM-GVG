@@ -32,6 +32,12 @@ type Lead = {
   phone: string;
   status: string;
   updated_at: string;
+  conversation_window?: {
+    is_open: boolean;
+    opened_at: string | null;
+    expires_at: string | null;
+    remaining_seconds: number;
+  };
 };
 type Task = {
   id: string;
@@ -65,6 +71,12 @@ type ChatMessage = {
   content?: string | null;
   body?: string | null;
   created_at: string;
+};
+type MessageTemplate = {
+  id: string;
+  name: string;
+  body: string;
+  content_sid: string;
 };
 
 const API_BASE = "https://crm-gvg.onrender.com";
@@ -187,6 +199,9 @@ export default function AppPage() {
   const [chatMessagesError, setChatMessagesError] = useState<string | null>(null);
   const [chatText, setChatText] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("crm_session");
@@ -772,13 +787,73 @@ export default function AppPage() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
+        if (data?.error === "WINDOW_CLOSED") {
+          throw new Error("WINDOW_CLOSED");
+        }
         throw new Error(data.message || data.error || "Falha ao enviar mensagem.");
       }
       setChatText("");
       await loadMessagesForLead(selectedChatLeadId);
       await refreshLeads();
     } catch (error) {
-      setChatMessagesError(error instanceof Error ? error.message : "Falha ao enviar mensagem.");
+      const message = error instanceof Error ? error.message : "Falha ao enviar mensagem.";
+      if (message === "WINDOW_CLOSED") {
+        setChatMessagesError("Janela de 24h fechada. Envie um template para reabrir a conversa.");
+      } else {
+        setChatMessagesError(message);
+      }
+    } finally {
+      setSendingChat(false);
+    }
+  }
+
+  async function loadTemplates(activeCompanyId: string) {
+    setLoadingTemplates(true);
+    setTemplatesError(null);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v2/templates?company_id=${encodeURIComponent(activeCompanyId)}`
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao carregar templates.");
+      }
+      const rows = (data.templates || []) as MessageTemplate[];
+      setTemplates(rows);
+    } catch (error) {
+      setTemplatesError(error instanceof Error ? error.message : "Falha ao carregar templates.");
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
+  async function sendRestartTemplate() {
+    if (!companyId || !selectedChatLeadId || !selectedChatLead) return;
+    const template = templates.find((item) => item.name === "restart_conversa");
+    if (!template) return;
+
+    setSendingChat(true);
+    setChatMessagesError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/chat/send-template`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: companyId,
+          lead_id: selectedChatLeadId,
+          template_id: template.id,
+          content_sid: template.content_sid,
+          variables: { "1": selectedChatLead.name || "cliente" },
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || "Falha ao enviar template.");
+      }
+      await loadMessagesForLead(selectedChatLeadId);
+      await refreshLeads();
+    } catch (error) {
+      setChatMessagesError(error instanceof Error ? error.message : "Falha ao enviar template.");
     } finally {
       setSendingChat(false);
     }
@@ -798,6 +873,13 @@ export default function AppPage() {
     if (!selectedChatLeadId) return;
     void loadMessagesForLead(selectedChatLeadId);
   }, [selectedModule, isChatConnected, selectedChatLeadId, companyId]);
+
+  useEffect(() => {
+    if (selectedModule !== "chat") return;
+    if (!isChatConnected) return;
+    if (!companyId) return;
+    void loadTemplates(companyId);
+  }, [selectedModule, isChatConnected, companyId]);
 
   const filteredTasks = tasks.filter((task) => {
     const lead = getLeadById(task.lead_id);
@@ -843,6 +925,12 @@ export default function AppPage() {
     return (lead.name || "").toLowerCase().includes(query) || (lead.phone || "").toLowerCase().includes(query);
   });
   const selectedChatLead = selectedChatLeadId ? leads.find((lead) => lead.id === selectedChatLeadId) || null : null;
+  const latestInboundMessage = chatMessages
+    .filter((message) => message.direction === "inbound")
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+  const selectedLeadWindowOpen = latestInboundMessage
+    ? Date.now() - new Date(latestInboundMessage.created_at).getTime() < 24 * 60 * 60 * 1000
+    : false;
 
   if (!session) return null;
 
@@ -1553,6 +1641,9 @@ export default function AppPage() {
                         <div className="border-b border-[var(--line)] pb-3">
                           <p className="text-sm font-semibold text-[var(--foreground)]">{selectedChatLead.name || "Sem nome"}</p>
                           <p className="text-xs text-[var(--muted)]">{selectedChatLead.phone}</p>
+                          <p className={`mt-1 text-xs ${selectedLeadWindowOpen ? "text-emerald-700" : "text-amber-700"}`}>
+                            {selectedLeadWindowOpen ? "Janela 24h: aberta" : "Janela 24h: fechada (use template)"}
+                          </p>
                         </div>
 
                         <div className="mt-3 h-[430px] space-y-2 overflow-y-auto rounded-xl border border-[var(--line)] bg-[#fffdfd] p-3">
@@ -1587,6 +1678,31 @@ export default function AppPage() {
                           <p className="mt-2 text-xs text-rose-600">{chatMessagesError}</p>
                         ) : null}
 
+                        {!selectedLeadWindowOpen ? (
+                          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <p className="text-xs text-amber-800">
+                              Janela fechada. Use a mensagem de abertura para reativar a conversa.
+                            </p>
+                            <button
+                              onClick={sendRestartTemplate}
+                              disabled={
+                                sendingChat ||
+                                loadingTemplates ||
+                                !templates.some((template) => template.name === "restart_conversa")
+                              }
+                              className="mt-2 h-10 rounded-xl border border-amber-300 bg-white px-3 text-sm font-medium text-amber-800 disabled:opacity-60"
+                            >
+                              Enviar mensagem de abertura
+                            </button>
+                            {templatesError ? <p className="mt-2 text-xs text-rose-600">{templatesError}</p> : null}
+                            {!loadingTemplates && !templates.some((template) => template.name === "restart_conversa") ? (
+                              <p className="mt-2 text-xs text-rose-600">
+                                Template obrigatorio `restart_conversa` nao encontrado para esta empresa.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
                         <div className="mt-3 flex gap-2">
                           <input
                             value={chatText}
@@ -1598,11 +1714,12 @@ export default function AppPage() {
                               }
                             }}
                             placeholder="Digite uma mensagem..."
-                            className="h-11 flex-1 rounded-xl border border-[var(--line)] px-3 text-sm"
+                            disabled={!selectedLeadWindowOpen}
+                            className="h-11 flex-1 rounded-xl border border-[var(--line)] px-3 text-sm disabled:bg-zinc-100"
                           />
                           <button
                             onClick={sendChatMessage}
-                            disabled={sendingChat || !chatText.trim()}
+                            disabled={sendingChat || !chatText.trim() || !selectedLeadWindowOpen}
                             className="h-11 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
                           >
                             Enviar

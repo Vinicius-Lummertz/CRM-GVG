@@ -12,6 +12,7 @@ const chatSendTemplate = require('./chat/sendTemplate');
 const chatStatusWebhook = require('./chat/statusWebhook');
 const templatesCreate = require('./templates/create');
 const templatesGet = require('./templates/get');
+const templatesSync = require('./templates/sync');
 const deprecatedEndpoint = require('./common/deprecated');
 const leadsGet = require('./leads/get');
 const leadsCreate = require('./leads/create');
@@ -75,6 +76,7 @@ app.post('/api/v2/chat/webhook', messagesGet);
 
 app.post('/api/v2/templates', templatesCreate);
 app.get('/api/v2/templates', templatesGet);
+app.post('/api/v2/templates/sync', templatesSync);
 
 app.get('/api/v2/leads', leadsGet);
 app.post('/api/v2/leads', leadsCreate);

@@ -31,3 +31,16 @@ Todos os endpoints operam dentro da empresa selecionada.
 - **Arquivo:** `get.js`
 
 Retorna apenas templates ativos (`is_active = 1`) da empresa selecionada.
+
+### Sincronizar templates da Twilio
+- **Rota:** `POST /api/v2/templates/sync`
+- **Arquivo:** `sync.js`
+
+Sincroniza os templates do Twilio Content API para a tabela `templates` da empresa.
+
+#### Body obrigatorio
+```json
+{
+  "company_id": "uuid-da-empresa"
+}
+```
