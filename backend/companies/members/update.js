@@ -9,10 +9,15 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SEC
 
 module.exports = async (req, res) => {
     const { companyId, memberId } = req.params;
+    const actorUserId = parseOptionalString(req.body.user_id || req.query.user_id);
     const payload = {};
 
     if (!isValidUuid(companyId) || !isValidUuid(memberId)) {
         return res.status(400).json({ success: false, error: "Parametros 'companyId' e 'memberId' devem ser UUIDs validos." });
+    }
+
+    if (!actorUserId || !isValidUuid(actorUserId)) {
+        return res.status(400).json({ success: false, error: "Informe 'user_id' valido para atualizar membros." });
     }
 
     if (req.body.role !== undefined) {
@@ -29,6 +34,21 @@ module.exports = async (req, res) => {
 
     try {
         console.log(`[CRM] Atualizando membro ${memberId} da empresa ${companyId}`);
+
+        const { data: actorMembership, error: actorMembershipError } = await supabase
+            .from('company_members')
+            .select('id, role')
+            .eq('company_id', companyId)
+            .eq('profile_id', actorUserId)
+            .maybeSingle();
+
+        if (actorMembershipError) throw actorMembershipError;
+        if (!actorMembership) {
+            return res.status(403).json({ success: false, error: "Usuario sem acesso a esta empresa." });
+        }
+        if (!['owner', 'admin'].includes(actorMembership.role)) {
+            return res.status(403).json({ success: false, error: "Apenas owner/admin podem editar membros." });
+        }
 
         const { data: member, error } = await supabase
             .from('company_members')

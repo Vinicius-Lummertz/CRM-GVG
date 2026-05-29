@@ -10,6 +10,9 @@ type Session = {
   authenticatedAt: string;
 };
 
+type CompanyRole = "owner" | "admin" | "assistant_ops" | "operator_chat" | "viewer";
+type ThemeMode = "rosa" | "grafite";
+
 type DashboardSummary = {
   success: boolean;
   cards: {
@@ -73,6 +76,17 @@ type ChatMessage = {
   body?: string | null;
   created_at: string;
 };
+type CompanyMember = {
+  id: string;
+  role: CompanyRole;
+  profile_id?: string | null;
+  joined_at?: string | null;
+  profile?: {
+    id?: string;
+    full_name?: string | null;
+    phone?: string | null;
+  } | null;
+};
 
 const API_BASE = "https://crm-gvg.onrender.com";
 type IconName = "home" | "kanban" | "calendar" | "tasks" | "chat" | "user" | "settings";
@@ -110,6 +124,37 @@ function Trend({ value }: { value: number }) {
   return <p className={`mt-1 text-xs ${color}`}>{`${arrow} ${rounded === 0 ? "-" : text}`}</p>;
 }
 
+function AppBootstrapSkeleton() {
+  return (
+    <main className="hero-glow min-h-screen">
+      <div className="mx-auto flex min-h-screen max-w-[1500px] animate-pulse">
+        <aside className="w-[270px] border-r border-[var(--line)] bg-white/90 px-3 py-6">
+          <div className="h-4 w-24 rounded bg-pink-100" />
+          <div className="mt-3 h-3 w-40 rounded bg-pink-100/80" />
+          <div className="mt-8 space-y-2">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div key={index} className="h-11 w-full rounded-xl bg-pink-100/70" />
+            ))}
+          </div>
+        </aside>
+        <section className="flex-1 p-6 md:p-8">
+          <div className="h-8 w-56 rounded bg-pink-100" />
+          <div className="mt-2 h-4 w-80 rounded bg-pink-100/80" />
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="h-32 rounded-2xl border border-[var(--line)] bg-white" />
+            ))}
+          </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="h-72 rounded-2xl border border-[var(--line)] bg-white" />
+            <div className="h-72 rounded-2xl border border-[var(--line)] bg-white" />
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 function NavIcon({ name }: { name: IconName }) {
   const cls = "h-[18px] w-[18px] stroke-current fill-none";
   switch (name) {
@@ -141,12 +186,17 @@ async function copyToClipboard(value: string) {
 
 export default function AppPage() {
   const router = useRouter();
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [selectedModule, setSelectedModule] = useState("inicio");
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState("");
+  const [currentRole, setCurrentRole] = useState<CompanyRole>("viewer");
+  const [companyMembers, setCompanyMembers] = useState<CompanyMember[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [leadsError, setLeadsError] = useState<string | null>(null);
@@ -198,21 +248,48 @@ export default function AppPage() {
   const [newCompanyPhone, setNewCompanyPhone] = useState("");
   const [creatingCompany, setCreatingCompany] = useState(false);
   const [companyOnboardingError, setCompanyOnboardingError] = useState<string | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("rosa");
+  const [settingsName, setSettingsName] = useState("");
+  const [settingsPhone, setSettingsPhone] = useState("");
+  const [settingsDisplayName, setSettingsDisplayName] = useState("");
+  const [settingsMetaBusinessId, setSettingsMetaBusinessId] = useState("");
+  const [settingsMetaPhoneId, setSettingsMetaPhoneId] = useState("");
+  const [savingCompanySettings, setSavingCompanySettings] = useState(false);
+  const [companySettingsError, setCompanySettingsError] = useState<string | null>(null);
+  const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("crm_session");
     if (!raw) {
+      setSessionChecked(true);
+      setBootstrapping(false);
       router.replace("/otp");
       return;
     }
 
     try {
       setSession(JSON.parse(raw) as Session);
+      setBootstrapping(true);
+      setSessionChecked(true);
     } catch {
       localStorage.removeItem("crm_session");
+      setSessionChecked(true);
+      setBootstrapping(false);
       router.replace("/otp");
     }
   }, [router]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("crm_theme_mode");
+    const nextTheme: ThemeMode = savedTheme === "grafite" ? "grafite" : "rosa";
+    setThemeMode(nextTheme);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", themeMode);
+    localStorage.setItem("crm_theme_mode", themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     if (!session) return;
@@ -302,6 +379,7 @@ export default function AppPage() {
         setSummaryError(error instanceof Error ? error.message : "Falha ao carregar dashboard.");
       } finally {
         setLoadingSummary(false);
+        setBootstrapping(false);
       }
     }
 
@@ -349,6 +427,40 @@ export default function AppPage() {
     void loadChatConnection(companyId);
   }, [companyId]);
 
+  useEffect(() => {
+    if (!companyId || !profileId) return;
+    const activeCompanyId = companyId;
+    const activeProfileId = profileId;
+
+    async function loadCompanyContext() {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/v2/companies/${activeCompanyId}?user_id=${encodeURIComponent(activeProfileId)}`
+        );
+        const data = await response.json();
+        if (!response.ok || !data.success || !data.company) {
+          throw new Error(data.error || "Falha ao carregar empresa.");
+        }
+
+        const company = data.company;
+        const role: CompanyRole = (company.membership?.role || "viewer") as CompanyRole;
+        setCurrentRole(role);
+        setCompanyName(company.name || "");
+        setSettingsName(company.name || "");
+        setSettingsPhone(company.commercial_phone || "");
+        const connection = company.company_settings?.chat_connection || {};
+        setSettingsDisplayName(connection.display_name || "");
+        setSettingsMetaBusinessId(connection.meta_business_id || "");
+        setSettingsMetaPhoneId(connection.meta_phone_number_id || "");
+        setCompanyMembers(Array.isArray(company.members) ? (company.members as CompanyMember[]) : []);
+      } catch (error) {
+        setCompanySettingsError(error instanceof Error ? error.message : "Falha ao carregar contexto da empresa.");
+      }
+    }
+
+    void loadCompanyContext();
+  }, [companyId, profileId]);
+
   async function loadTasks(activeCompanyId: string) {
     setLoadingTasks(true);
     setTasksError(null);
@@ -369,6 +481,10 @@ export default function AppPage() {
   }
 
   async function moveLead(leadId: string, targetColumnId: string) {
+    if (!canManageOperations) {
+      setLeadsError("Seu perfil nao possui permissao para mover leads.");
+      return;
+    }
     if (!companyId) return;
     const target = KANBAN_COLUMNS.find((column) => column.id === targetColumnId);
     if (!target) return;
@@ -413,6 +529,10 @@ export default function AppPage() {
   }
 
   async function createLeadManually() {
+    if (!canManageOperations) {
+      setLeadsError("Seu perfil nao possui permissao para criar leads.");
+      return;
+    }
     if (!companyId) {
       setLeadsError("Empresa nao identificada para criar lead.");
       return;
@@ -455,6 +575,10 @@ export default function AppPage() {
   }
 
   async function createTask() {
+    if (!canWorkTasksCalendar) {
+      setTasksError("Seu perfil nao possui permissao para criar tasks.");
+      return;
+    }
     if (!companyId) return;
     const title = newTaskTitle.trim();
     if (!title) {
@@ -493,6 +617,10 @@ export default function AppPage() {
   }
 
   async function toggleTask(task: Task) {
+    if (!canWorkTasksCalendar) {
+      setTasksError("Seu perfil nao possui permissao para alterar tasks.");
+      return;
+    }
     if (!companyId) return;
 
     const previous = tasks;
@@ -568,6 +696,18 @@ export default function AppPage() {
     }
   }
 
+  const moduleAccessByRole: Record<CompanyRole, string[]> = {
+    owner: ["inicio", "kanban", "agenda", "tasks", "chat", "conta", "config"],
+    admin: ["inicio", "kanban", "agenda", "tasks", "chat", "conta", "config"],
+    assistant_ops: ["inicio", "agenda", "tasks"],
+    operator_chat: ["inicio", "chat"],
+    viewer: ["inicio"],
+  };
+  const canManageOperations = currentRole === "owner" || currentRole === "admin";
+  const canWorkTasksCalendar = canManageOperations || currentRole === "assistant_ops";
+  const canWorkChat = canManageOperations || currentRole === "operator_chat";
+  const allowedModules = moduleAccessByRole[currentRole] || ["inicio"];
+
   const modules = useMemo(
     () => [
       { id: "inicio", label: "Inicio", icon: "home" as IconName },
@@ -581,7 +721,7 @@ export default function AppPage() {
 
   const accountItems = useMemo(
     () => [
-      { id: "conta", label: "Conta", icon: "user" as IconName },
+      { id: "conta", label: "Empresa", icon: "user" as IconName },
       { id: "config", label: "Configuracoes", icon: "settings" as IconName },
     ],
     []
@@ -592,12 +732,91 @@ export default function AppPage() {
     return acc;
   }, {});
 
+  useEffect(() => {
+    if (allowedModules.includes(selectedModule)) return;
+    setSelectedModule("inicio");
+  }, [allowedModules, selectedModule]);
+
   function getLeadById(leadId?: string | null) {
     if (!leadId) return null;
     return leads.find((lead) => lead.id === leadId) || null;
   }
 
+  async function saveCompanySettings() {
+    if (!companyId || !profileId) return;
+    if (!canManageOperations) {
+      setCompanySettingsError("Somente owner/admin podem alterar as configuracoes da empresa.");
+      return;
+    }
+
+    setSavingCompanySettings(true);
+    setCompanySettingsError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/companies/${companyId}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: profileId,
+          name: settingsName,
+          commercial_phone: settingsPhone,
+          display_name: settingsDisplayName || null,
+          meta_business_id: settingsMetaBusinessId || null,
+          meta_phone_number_id: settingsMetaPhoneId || null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.company) {
+        throw new Error(data.error || "Falha ao salvar configuracoes da empresa.");
+      }
+      setCompanyName(data.company.name || settingsName);
+      await loadChatConnection(companyId);
+    } catch (error) {
+      setCompanySettingsError(error instanceof Error ? error.message : "Falha ao salvar configuracoes da empresa.");
+    } finally {
+      setSavingCompanySettings(false);
+    }
+  }
+
+  const editableRoles: CompanyRole[] = ["admin", "assistant_ops", "operator_chat", "viewer"];
+
+  async function updateMemberRole(memberId: string, nextRole: CompanyRole) {
+    if (!companyId || !profileId) return;
+    if (!canManageOperations) {
+      setCompanySettingsError("Somente owner/admin podem editar membros.");
+      return;
+    }
+
+    setUpdatingMemberId(memberId);
+    setCompanySettingsError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/companies/${companyId}/members/${memberId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: profileId,
+          role: nextRole,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.member) {
+        throw new Error(data.error || "Falha ao atualizar papel do membro.");
+      }
+
+      setCompanyMembers((prev) =>
+        prev.map((member) => (member.id === memberId ? { ...member, role: data.member.role as CompanyRole } : member))
+      );
+    } catch (error) {
+      setCompanySettingsError(error instanceof Error ? error.message : "Falha ao atualizar papel do membro.");
+    } finally {
+      setUpdatingMemberId(null);
+    }
+  }
+
   async function createEvent() {
+    if (!canWorkTasksCalendar) {
+      setEventsError("Seu perfil nao possui permissao para criar eventos.");
+      return;
+    }
     if (!companyId) return;
     const title = eventTitle.trim();
     if (!title || !eventStart || !eventEnd) {
@@ -660,6 +879,10 @@ export default function AppPage() {
   }
 
   async function saveEditedEvent() {
+    if (!canWorkTasksCalendar) {
+      setEventsError("Seu perfil nao possui permissao para editar eventos.");
+      return;
+    }
     if (!companyId || !editingEventId) return;
     const title = eventTitle.trim();
     if (!title || !eventStart || !eventEnd) {
@@ -691,6 +914,10 @@ export default function AppPage() {
   }
 
   async function deleteEvent(eventId: string) {
+    if (!canWorkTasksCalendar) {
+      setEventsError("Seu perfil nao possui permissao para remover eventos.");
+      return;
+    }
     if (!companyId) return;
 
     try {
@@ -754,6 +981,10 @@ export default function AppPage() {
   }
 
   async function saveChatConnection() {
+    if (!canManageOperations) {
+      setChatConnectionError("Somente owner/admin podem alterar a configuracao do chat da empresa.");
+      return;
+    }
     if (!companyId) return;
     setSavingChatConnection(true);
     setChatConnectionError(null);
@@ -779,6 +1010,10 @@ export default function AppPage() {
   }
 
   async function markChatConnected() {
+    if (!canManageOperations) {
+      setChatConnectionError("Somente owner/admin podem alterar a configuracao do chat da empresa.");
+      return;
+    }
     if (!companyId) return;
     setSavingChatConnection(true);
     setChatConnectionError(null);
@@ -829,6 +1064,10 @@ export default function AppPage() {
   }
 
   async function sendChatMessage() {
+    if (!canWorkChat) {
+      setChatMessagesError("Seu perfil nao possui permissao para enviar mensagens.");
+      return;
+    }
     if (!companyId || !selectedChatLeadId) return;
     const text = chatText.trim();
     if (!text) return;
@@ -868,6 +1107,10 @@ export default function AppPage() {
   }
 
   async function sendRestartTemplate() {
+    if (!canWorkChat) {
+      setChatMessagesError("Seu perfil nao possui permissao para enviar mensagens de abertura.");
+      return;
+    }
     if (!companyId || !selectedChatLeadId || !selectedChatLead) return;
 
     setSendingChat(true);
@@ -960,6 +1203,7 @@ export default function AppPage() {
     ? Date.now() - new Date(latestInboundMessage.created_at).getTime() < 24 * 60 * 60 * 1000
     : false;
 
+  if (!sessionChecked || bootstrapping) return <AppBootstrapSkeleton />;
   if (!session) return null;
 
   return (
@@ -980,7 +1224,7 @@ export default function AppPage() {
           </button>
 
           <nav className="mt-8 space-y-2">
-            {modules.map((item) => (
+            {modules.filter((item) => allowedModules.includes(item.id)).map((item) => (
               <button
                 key={item.id}
                 onClick={() => setSelectedModule(item.id)}
@@ -1000,7 +1244,7 @@ export default function AppPage() {
           </nav>
 
           <div className="mt-8 border-t border-[var(--line)] pt-6">
-            {accountItems.map((item) => (
+            {accountItems.filter((item) => allowedModules.includes(item.id)).map((item) => (
               <button
                 key={item.id}
                 onClick={() => setSelectedModule(item.id)}
@@ -1887,16 +2131,102 @@ export default function AppPage() {
                 </div>
               )}
             </div>
+          ) : selectedModule === "conta" ? (
+            <div className="rounded-2xl border border-[var(--line)] bg-white p-8">
+              <h2 className="text-2xl font-semibold text-[var(--foreground)]">Empresa</h2>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                Empresa ativa: <span className="font-semibold text-[var(--foreground)]">{companyName || "-"}</span>
+              </p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Seu nivel: <span className="font-semibold text-[var(--foreground)]">{currentRole}</span>
+              </p>
+            </div>
+          ) : selectedModule === "config" ? (
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-[var(--line)] bg-white p-6">
+                <h2 className="text-2xl font-semibold text-[var(--foreground)]">Configuracoes da Empresa</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Ajuste nome da empresa, numero comercial e dados da conexao com a Meta.
+                </p>
+                {!canManageOperations ? (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Somente owner/admin podem editar estas configuracoes.
+                  </p>
+                ) : null}
+                {companySettingsError ? (
+                  <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {companySettingsError}
+                  </p>
+                ) : null}
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <input value={settingsName} onChange={(e) => setSettingsName(e.target.value)} placeholder="Nome da empresa" className="h-11 rounded-xl border border-[var(--line)] px-3" disabled={!canManageOperations} />
+                  <input value={settingsPhone} onChange={(e) => setSettingsPhone(e.target.value)} placeholder="Numero comercial" className="h-11 rounded-xl border border-[var(--line)] px-3" disabled={!canManageOperations} />
+                  <input value={settingsDisplayName} onChange={(e) => setSettingsDisplayName(e.target.value)} placeholder="Nome de exibicao no WhatsApp" className="h-11 rounded-xl border border-[var(--line)] px-3" disabled={!canManageOperations} />
+                  <input value={settingsMetaBusinessId} onChange={(e) => setSettingsMetaBusinessId(e.target.value)} placeholder="Meta business id" className="h-11 rounded-xl border border-[var(--line)] px-3" disabled={!canManageOperations} />
+                  <input value={settingsMetaPhoneId} onChange={(e) => setSettingsMetaPhoneId(e.target.value)} placeholder="Meta phone number id" className="h-11 rounded-xl border border-[var(--line)] px-3 md:col-span-2" disabled={!canManageOperations} />
+                </div>
+                <button onClick={saveCompanySettings} disabled={savingCompanySettings || !canManageOperations} className="mt-4 h-10 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-70">
+                  {savingCompanySettings ? "Salvando..." : "Salvar configuracoes"}
+                </button>
+              </div>
+              <div className="rounded-2xl border border-[var(--line)] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[var(--foreground)]">Membros e permissoes</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Apenas owner/admin podem alterar o papel dos membros.
+                </p>
+                <div className="mt-4 space-y-2">
+                  {companyMembers.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-[var(--line)] p-3 text-sm text-[var(--muted)]">
+                      Nenhum membro encontrado.
+                    </p>
+                  ) : (
+                    companyMembers.map((member) => {
+                      const isOwner = member.role === "owner";
+                      const isEditing = updatingMemberId === member.id;
+                      return (
+                        <div key={member.id} className="grid gap-2 rounded-xl border border-[var(--line)] p-3 md:grid-cols-[1fr_220px] md:items-center">
+                          <div>
+                            <p className="text-sm font-semibold text-[var(--foreground)]">
+                              {member.profile?.full_name || "Sem nome"}
+                            </p>
+                            <p className="text-xs text-[var(--muted)]">{member.profile?.phone || "-"}</p>
+                          </div>
+                          <select
+                            value={member.role}
+                            disabled={!canManageOperations || isOwner || isEditing}
+                            onChange={(e) => void updateMemberRole(member.id, e.target.value as CompanyRole)}
+                            className="h-10 rounded-xl border border-[var(--line)] bg-white px-3 text-sm disabled:bg-zinc-100"
+                          >
+                            {isOwner ? (
+                              <option value="owner">owner</option>
+                            ) : (
+                              editableRoles.map((role) => (
+                                <option key={role} value={role}>
+                                  {role}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-[var(--line)] bg-white p-6">
+                <h3 className="text-lg font-semibold text-[var(--foreground)]">Tema pessoal</h3>
+                <p className="mt-1 text-sm text-[var(--muted)]">Este ajuste vale apenas para voce neste navegador.</p>
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => setThemeMode("rosa")} className={`h-10 rounded-xl border px-4 text-sm ${themeMode === "rosa" ? "border-[var(--primary)] bg-pink-50 text-[var(--primary)]" : "border-[var(--line)] bg-white text-[var(--foreground)]"}`}>Rosa</button>
+                  <button onClick={() => setThemeMode("grafite")} className={`h-10 rounded-xl border px-4 text-sm ${themeMode === "grafite" ? "border-[var(--primary)] bg-pink-50 text-[var(--primary)]" : "border-[var(--line)] bg-white text-[var(--foreground)]"}`}>Grafite</button>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="rounded-2xl border border-[var(--line)] bg-white p-8">
               <h2 className="text-2xl font-semibold text-[var(--foreground)]">
-                {selectedModule === "config"
-                  ? "Configuracoes"
-                  : selectedModule.charAt(0).toUpperCase() + selectedModule.slice(1)}
+                {selectedModule.charAt(0).toUpperCase() + selectedModule.slice(1)}
               </h2>
-              <p className="mt-2 text-[var(--muted)]">
-                Este modulo sera implementado em seguida, tela por tela.
-              </p>
             </div>
           )}
         </section>

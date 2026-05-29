@@ -1,4 +1,4 @@
-const VALID_MEMBER_ROLES = ['owner', 'admin', 'agent', 'viewer'];
+const VALID_MEMBER_ROLES = ['owner', 'admin', 'assistant_ops', 'operator_chat', 'viewer'];
 const VALID_MEMBER_STATUSES = ['active', 'inactive'];
 const VALID_WHATSAPP_PROVIDERS = ['meta', 'evolution', 'zapi'];
 const VALID_WHATSAPP_STATUSES = ['connected', 'disconnected', 'pending'];
