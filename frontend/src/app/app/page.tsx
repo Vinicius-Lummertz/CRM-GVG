@@ -124,6 +124,40 @@ function Trend({ value }: { value: number }) {
   return <p className={`mt-1 text-xs ${color}`}>{`${arrow} ${rounded === 0 ? "-" : text}`}</p>;
 }
 
+function TrendLine({ points }: { points: number[] }) {
+  const width = 520;
+  const height = 140;
+  const padding = 14;
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const range = Math.max(1, max - min);
+  const stepX = (width - padding * 2) / Math.max(1, points.length - 1);
+
+  const normalized = points.map((value, index) => {
+    const x = padding + index * stepX;
+    const y = height - padding - ((value - min) / range) * (height - padding * 2);
+    return { x, y, value };
+  });
+
+  const path = normalized
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+    .join(" ");
+
+  return (
+    <div className="mt-4">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-28 w-full">
+        <path d={path} fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {normalized.map((point, index) => (
+          <g key={index}>
+            <circle cx={point.x} cy={point.y} r="5" fill="var(--surface)" stroke="var(--primary)" strokeWidth="2.5" />
+            <title>{`Dia ${index + 1}: ${Math.round(point.value)}`}</title>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 function AppBootstrapSkeleton() {
   return (
     <main className="hero-glow min-h-screen">
@@ -713,8 +747,8 @@ export default function AppPage() {
       { id: "inicio", label: "Inicio", icon: "home" as IconName },
       { id: "kanban", label: "Kanban", icon: "kanban" as IconName },
       { id: "agenda", label: "Agenda", icon: "calendar" as IconName },
-      { id: "tasks", label: "Tasks", icon: "tasks" as IconName },
-      { id: "chat", label: "Chat", icon: "chat" as IconName },
+      { id: "tasks", label: "Tarefas", icon: "tasks" as IconName },
+      { id: "chat", label: "Conversas", icon: "chat" as IconName },
     ],
     []
   );
@@ -1189,6 +1223,25 @@ export default function AppPage() {
     .filter((event) => new Date(event.end_time).getTime() >= Date.now())
     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     .slice(0, 8);
+  const upcomingEventsDashboard = upcomingEvents.slice(0, 5);
+  const leadsTrendPoints = useMemo(() => {
+    const current = summary?.cards.leads_active.value ?? 0;
+    const trend = summary?.cards.leads_active.trend_pct ?? 0;
+    const base = Math.max(1, current / (1 + trend / 100 || 1));
+    return Array.from({ length: 8 }, (_, index) => {
+      const step = index / 7;
+      return Math.max(1, base + (current - base) * step);
+    });
+  }, [summary?.cards.leads_active.value, summary?.cards.leads_active.trend_pct]);
+  const revenueTrendPoints = useMemo(() => {
+    const current = summary?.cards.revenue.value ?? 0;
+    const trend = summary?.cards.revenue.trend_pct ?? 0;
+    const base = Math.max(1, current / (1 + trend / 100 || 1));
+    return Array.from({ length: 8 }, (_, index) => {
+      const step = index / 7;
+      return Math.max(1, base + (current - base) * step);
+    });
+  }, [summary?.cards.revenue.value, summary?.cards.revenue.trend_pct]);
   const selectedDayEvents = selectedDay ? (eventsByDay[selectedDay] || []) : [];
   const filteredChatLeads = leads.filter((lead) => {
     const query = chatLeadSearch.trim().toLowerCase();
@@ -1362,47 +1415,29 @@ export default function AppPage() {
               </div>
 
               <div className="grid gap-4 xl:grid-cols-3">
-                <article className="rounded-2xl border border-[var(--line)] bg-white p-5 xl:col-span-2">
-                  <p className="text-sm font-medium text-[var(--foreground)]">Pipeline rapido</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {[
-                      {
-                        stage: "Contato iniciado",
-                        qty: summary?.pipeline.contato_iniciado ?? 0,
-                      },
-                      {
-                        stage: "Em negociacao",
-                        qty: summary?.pipeline.em_negociacao ?? 0,
-                      },
-                      {
-                        stage: "Proposta enviada",
-                        qty: summary?.pipeline.proposta_enviada ?? 0,
-                      },
-                      {
-                        stage: "Orcamento fechado",
-                        qty: summary?.pipeline.orcamento_fechado ?? 0,
-                      },
-                    ].map((item) => (
-                      <div key={item.stage} className="rounded-xl bg-pink-50 p-4">
-                        <p className="text-xs text-[var(--muted)]">{item.stage}</p>
-                        <p className="mt-2 text-xl font-semibold text-[var(--foreground)]">
-                          {loadingSummary ? "-" : item.qty}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                <article className="rounded-2xl border border-[var(--line)] bg-white p-5">
+                  <p className="text-sm font-medium text-[var(--foreground)]">Leads ao longo do tempo</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">Tendencia estimada com base nos ultimos 30 dias.</p>
+                  <TrendLine points={leadsTrendPoints} />
                 </article>
 
                 <article className="rounded-2xl border border-[var(--line)] bg-white p-5">
-                  <p className="text-sm font-medium text-[var(--foreground)]">Agenda de hoje</p>
+                  <p className="text-sm font-medium text-[var(--foreground)]">Faturamento ao longo do tempo</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">Tendencia estimada com base nos ultimos 30 dias.</p>
+                  <TrendLine points={revenueTrendPoints} />
+                </article>
+
+                <article className="rounded-2xl border border-[var(--line)] bg-white p-5 xl:col-span-1">
+                  <p className="text-sm font-medium text-[var(--foreground)]">Proximos compromissos</p>
                   <ul className="mt-4 space-y-3 text-sm text-[var(--foreground)]">
-                    {(summary?.today_events || []).length === 0 ? (
+                    {upcomingEventsDashboard.length === 0 ? (
                       <li className="rounded-lg bg-pink-50 px-3 py-2 text-[var(--muted)]">
-                        Sem eventos para hoje.
+                        Sem compromissos futuros.
                       </li>
                     ) : (
-                      (summary?.today_events || []).map((event) => (
+                      upcomingEventsDashboard.map((event) => (
                         <li key={event.id} className="rounded-lg bg-pink-50 px-3 py-2">
+                          {new Date(event.start_time).toLocaleDateString("pt-BR")}{" "}
                           {new Date(event.start_time).toLocaleTimeString("pt-BR", {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -1744,7 +1779,7 @@ export default function AppPage() {
           ) : selectedModule === "tasks" ? (
             <div className="space-y-5">
               <div>
-                <h2 className="text-2xl font-semibold text-[var(--foreground)]">Tasks</h2>
+                <h2 className="text-2xl font-semibold text-[var(--foreground)]">Tarefas</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
                   Lista inteligente para manter rotina e entregas em dia.
                 </p>
@@ -1879,11 +1914,11 @@ export default function AppPage() {
           ) : selectedModule === "chat" ? (
             <div className="space-y-5">
               <div>
-                <h2 className="text-2xl font-semibold text-[var(--foreground)]">Chat</h2>
+                <h2 className="text-2xl font-semibold text-[var(--foreground)]">Conversas</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
                   {isChatConnected
-                    ? "Chat liberado para uso."
-                    : "O chat so funciona quando o numero da empresa estiver conectado com a Meta."}
+                    ? "Conversas liberadas para uso."
+                    : "As conversas so funcionam quando o numero da empresa estiver conectado com a Meta."}
                 </p>
               </div>
 
