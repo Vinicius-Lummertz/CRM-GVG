@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type Session = {
   phone: string;
   isMaster: boolean;
+  profileId?: string | null;
   authenticatedAt: string;
 };
 
@@ -193,6 +194,10 @@ export default function AppPage() {
   const [chatMessagesError, setChatMessagesError] = useState<string | null>(null);
   const [chatText, setChatText] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newCompanyPhone, setNewCompanyPhone] = useState("");
+  const [creatingCompany, setCreatingCompany] = useState(false);
+  const [companyOnboardingError, setCompanyOnboardingError] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("crm_session");
@@ -218,9 +223,8 @@ export default function AppPage() {
       setSummaryError(null);
 
       try {
-        let selectedCompanyId = localStorage.getItem("crm_company_id");
-
-        if (!selectedCompanyId) {
+        let resolvedProfileId: string | null = currentSession.profileId || null;
+        if (!resolvedProfileId) {
           const profileRes = await fetch(
             `${API_BASE}/api/v2/profiles/by-phone?phone=${encodeURIComponent(currentSession.phone)}`
           );
@@ -229,21 +233,32 @@ export default function AppPage() {
           if (!profileRes.ok || !profileData.success || !profileData.profile?.id) {
             throw new Error("Nao foi possivel identificar o perfil para carregar o dashboard.");
           }
-          setProfileId(profileData.profile.id);
+          resolvedProfileId = profileData.profile.id;
+        }
+        if (!resolvedProfileId) {
+          throw new Error("Nao foi possivel identificar o perfil para carregar o dashboard.");
+        }
+        setProfileId(resolvedProfileId);
 
-          const companiesRes = await fetch(
-            `${API_BASE}/api/v2/companies?user_id=${encodeURIComponent(profileData.profile.id)}`
-          );
-          const companiesData = await companiesRes.json();
+        const companiesRes = await fetch(
+          `${API_BASE}/api/v2/companies?user_id=${encodeURIComponent(resolvedProfileId)}`
+        );
+        const companiesData = await companiesRes.json();
 
-          if (!companiesRes.ok || !companiesData.success) {
-            throw new Error("Nao foi possivel carregar empresas do usuario.");
-          }
+        if (!companiesRes.ok || !companiesData.success) {
+          throw new Error("Nao foi possivel carregar empresas do usuario.");
+        }
 
-          const companies = Array.isArray(companiesData.companies)
-            ? companiesData.companies
-            : [];
+        const companies = Array.isArray(companiesData.companies)
+          ? companiesData.companies
+          : [];
 
+        let selectedCompanyId = localStorage.getItem("crm_company_id");
+        const selectedBelongsToUser = selectedCompanyId
+          ? companies.some((company: { id?: string }) => company?.id === selectedCompanyId)
+          : false;
+
+        if (!selectedBelongsToUser) {
           const mostRecentCompany = companies
             .slice()
             .sort((a: { joined_at?: string }, b: { joined_at?: string }) => {
@@ -254,7 +269,10 @@ export default function AppPage() {
 
           selectedCompanyId = mostRecentCompany?.id || null;
           if (!selectedCompanyId) {
-            throw new Error("Nenhuma empresa encontrada para este usuario.");
+            localStorage.removeItem("crm_company_id");
+            setCompanyId(null);
+            setSummary(null);
+            return;
           }
 
           localStorage.setItem("crm_company_id", selectedCompanyId);
@@ -496,7 +514,50 @@ export default function AppPage() {
 
   function logout() {
     localStorage.removeItem("crm_session");
+    localStorage.removeItem("crm_company_id");
     router.replace("/otp");
+  }
+
+  async function createCompanyOnboarding() {
+    if (!profileId) {
+      setCompanyOnboardingError("Perfil nao identificado para criar empresa.");
+      return;
+    }
+
+    const name = newCompanyName.trim();
+    const commercialPhone = newCompanyPhone.trim();
+    if (!name || !commercialPhone) {
+      setCompanyOnboardingError("Preencha nome da empresa e telefone comercial.");
+      return;
+    }
+
+    setCreatingCompany(true);
+    setCompanyOnboardingError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/companies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_id: profileId,
+          name,
+          commercial_phone: commercialPhone
+        })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.companyId) {
+        throw new Error(data.error || "Falha ao criar empresa.");
+      }
+
+      localStorage.setItem("crm_company_id", data.companyId);
+      setCompanyId(data.companyId);
+      setNewCompanyName("");
+      setNewCompanyPhone("");
+      setSelectedModule("inicio");
+    } catch (error) {
+      setCompanyOnboardingError(error instanceof Error ? error.message : "Falha ao criar empresa.");
+    } finally {
+      setCreatingCompany(false);
+    }
   }
 
   const modules = useMemo(
@@ -962,6 +1023,39 @@ export default function AppPage() {
         </aside>
 
         <section className="flex-1 p-6 md:p-8">
+          {!companyId ? (
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <h2 className="text-xl font-semibold text-amber-900">Voce ainda nao esta vinculado a uma empresa</h2>
+              <p className="mt-1 text-sm text-amber-800">
+                O chat e os demais modulos operacionais precisam de uma empresa ativa. Crie sua empresa para continuar.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <input
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  placeholder="Nome da empresa"
+                  className="h-11 rounded-xl border border-amber-200 bg-white px-3"
+                />
+                <input
+                  value={newCompanyPhone}
+                  onChange={(e) => setNewCompanyPhone(e.target.value)}
+                  placeholder="+55 11 99999-9999"
+                  className="h-11 rounded-xl border border-amber-200 bg-white px-3"
+                />
+              </div>
+              {companyOnboardingError ? (
+                <p className="mt-3 text-sm text-rose-700">{companyOnboardingError}</p>
+              ) : null}
+              <button
+                onClick={createCompanyOnboarding}
+                disabled={creatingCompany}
+                className="mt-4 h-10 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-70"
+              >
+                {creatingCompany ? "Criando empresa..." : "Criar minha empresa"}
+              </button>
+            </div>
+          ) : null}
+
           {selectedModule === "inicio" ? (
             <div className="space-y-6">
               <div>
@@ -1547,7 +1641,14 @@ export default function AppPage() {
                 </div>
               ) : null}
 
-              {isChatConnected ? (
+              {!companyId ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                  <p className="text-sm font-semibold text-amber-900">Chat indisponivel sem empresa</p>
+                  <p className="mt-1 text-sm text-amber-800">
+                    Para liberar o chat, primeiro crie sua empresa no onboarding no topo da tela.
+                  </p>
+                </div>
+              ) : isChatConnected ? (
                 <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
                   <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
                     <div className="mb-3 flex items-center justify-between">

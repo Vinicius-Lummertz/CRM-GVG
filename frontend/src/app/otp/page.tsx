@@ -41,6 +41,7 @@ export default function OtpPage() {
           authenticatedAt: new Date().toISOString(),
         })
       );
+      localStorage.removeItem("crm_company_id");
       router.push("/app");
       return;
     }
@@ -90,14 +91,21 @@ export default function OtpPage() {
         throw new Error(data.error || "Falha ao validar OTP.");
       }
 
+      const profileId =
+        data && data.profile && typeof data.profile.id === "string"
+          ? data.profile.id
+          : null;
+
       localStorage.setItem(
         "crm_session",
         JSON.stringify({
           phone: `+${normalizedPhone}`,
           isMaster: false,
+          profileId,
           authenticatedAt: new Date().toISOString(),
         })
       );
+      localStorage.removeItem("crm_company_id");
 
       router.push("/app");
     } catch (err) {

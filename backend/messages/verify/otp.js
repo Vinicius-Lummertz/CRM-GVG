@@ -53,5 +53,59 @@ module.exports = async (req, res) => {
     }
 
     await supabase.from('otp_challenges').update({ status: 'verified' }).eq('id', challenge.id);
-    return res.status(200).json({ success: true, message: "Numero verificado com sucesso!" });
+
+    let profile = null;
+
+    const { data: existingProfile, error: profileFetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', phone)
+        .maybeSingle();
+
+    if (profileFetchError) {
+        return res.status(500).json({ success: false, error: profileFetchError.message });
+    }
+
+    if (existingProfile) {
+        profile = existingProfile;
+    } else {
+        const { data: createdProfile, error: profileCreateError } = await supabase
+            .from('profiles')
+            .insert([{
+                id: crypto.randomUUID(),
+                phone
+            }])
+            .select('*')
+            .single();
+
+        if (profileCreateError) {
+            return res.status(500).json({ success: false, error: profileCreateError.message });
+        }
+
+        profile = createdProfile;
+    }
+
+    const { data: memberships, error: membershipsError } = await supabase
+        .from('company_members')
+        .select('id, role, joined_at, company:companies(*)')
+        .eq('profile_id', profile.id)
+        .order('joined_at', { ascending: true });
+
+    if (membershipsError) {
+        return res.status(500).json({ success: false, error: membershipsError.message });
+    }
+
+    const companies = (memberships || []).map((item) => ({
+        ...(item.company || {}),
+        membership_id: item.id,
+        role: item.role,
+        joined_at: item.joined_at
+    }));
+
+    return res.status(200).json({
+        success: true,
+        message: "Numero verificado com sucesso!",
+        profile,
+        companies
+    });
 };
