@@ -12,6 +12,38 @@ function normalizePhone(value) {
     return digits ? `+${digits}` : null;
 }
 
+async function findOrCreateAuthUserIdByPhone(phone) {
+    for (let page = 1; page <= 20; page += 1) {
+        const { data: listed, error: listError } = await supabase.auth.admin.listUsers({
+            page,
+            perPage: 100
+        });
+        if (listError) throw listError;
+
+        const users = (listed && Array.isArray(listed.users)) ? listed.users : [];
+        const existingUser = users.find((user) => user && user.phone === phone);
+        if (existingUser && existingUser.id) {
+            return existingUser.id;
+        }
+
+        if (users.length < 100) {
+            break;
+        }
+    }
+
+    const { data: created, error: createError } = await supabase.auth.admin.createUser({
+        phone,
+        phone_confirm: true
+    });
+    if (createError) throw createError;
+
+    if (!created || !created.user || !created.user.id) {
+        throw new Error('Nao foi possivel criar/obter usuario de autenticacao.');
+    }
+
+    return created.user.id;
+}
+
 module.exports = async (req, res) => {
     const phone = normalizePhone(req.body.phone);
     const { code } = req.body;
@@ -69,10 +101,17 @@ module.exports = async (req, res) => {
     if (existingProfile) {
         profile = existingProfile;
     } else {
+        let authUserId = null;
+        try {
+            authUserId = await findOrCreateAuthUserIdByPhone(phone);
+        } catch (authError) {
+            return res.status(500).json({ success: false, error: `Falha ao criar/obter auth user para o telefone: ${authError.message}` });
+        }
+
         const { data: createdProfile, error: profileCreateError } = await supabase
             .from('profiles')
             .insert([{
-                id: crypto.randomUUID(),
+                id: authUserId,
                 phone
             }])
             .select('*')
