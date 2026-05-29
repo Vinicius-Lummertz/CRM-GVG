@@ -11,6 +11,22 @@ function normalizePhone(rawValue: string) {
   return digits;
 }
 
+async function persistSessionCookie(payload: {
+  phone: string;
+  isMaster: boolean;
+  profileId?: string | null;
+  authenticatedAt: string;
+}) {
+  const response = await fetch("/api/auth/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error("Falha ao persistir sessao.");
+  }
+}
+
 export default function OtpPage() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
@@ -33,14 +49,11 @@ export default function OtpPage() {
     }
 
     if (normalizedPhone === MASTER_PHONE) {
-      localStorage.setItem(
-        "crm_session",
-        JSON.stringify({
-          phone: `+${MASTER_PHONE}`,
-          isMaster: true,
-          authenticatedAt: new Date().toISOString(),
-        })
-      );
+      await persistSessionCookie({
+        phone: `+${MASTER_PHONE}`,
+        isMaster: true,
+        authenticatedAt: new Date().toISOString(),
+      });
       localStorage.removeItem("crm_company_id");
       router.push("/app");
       return;
@@ -96,15 +109,12 @@ export default function OtpPage() {
           ? data.profile.id
           : null;
 
-      localStorage.setItem(
-        "crm_session",
-        JSON.stringify({
-          phone: `+${normalizedPhone}`,
-          isMaster: false,
-          profileId,
-          authenticatedAt: new Date().toISOString(),
-        })
-      );
+      await persistSessionCookie({
+        phone: `+${normalizedPhone}`,
+        isMaster: false,
+        profileId,
+        authenticatedAt: new Date().toISOString(),
+      });
       localStorage.removeItem("crm_company_id");
 
       router.push("/app");

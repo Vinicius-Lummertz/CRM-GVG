@@ -293,24 +293,27 @@ export default function AppPage() {
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("crm_session");
-    if (!raw) {
-      setSessionChecked(true);
-      setBootstrapping(false);
-      router.replace("/otp");
-      return;
+    async function loadSessionFromHttpOnlyCookie() {
+      try {
+        const response = await fetch("/api/auth/session", { method: "GET" });
+        const data = await response.json();
+        if (!response.ok || !data.success || !data.session) {
+          setSessionChecked(true);
+          setBootstrapping(false);
+          router.replace("/otp");
+          return;
+        }
+        setSession(data.session as Session);
+        setBootstrapping(true);
+        setSessionChecked(true);
+      } catch {
+        setSessionChecked(true);
+        setBootstrapping(false);
+        router.replace("/otp");
+      }
     }
 
-    try {
-      setSession(JSON.parse(raw) as Session);
-      setBootstrapping(true);
-      setSessionChecked(true);
-    } catch {
-      localStorage.removeItem("crm_session");
-      setSessionChecked(true);
-      setBootstrapping(false);
-      router.replace("/otp");
-    }
+    void loadSessionFromHttpOnlyCookie();
   }, [router]);
 
   useEffect(() => {
@@ -682,8 +685,8 @@ export default function AppPage() {
     }
   }
 
-  function logout() {
-    localStorage.removeItem("crm_session");
+  async function logout() {
+    await fetch("/api/auth/session", { method: "DELETE" });
     localStorage.removeItem("crm_company_id");
     router.replace("/otp");
   }
