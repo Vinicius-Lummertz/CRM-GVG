@@ -278,10 +278,18 @@ export default function AppPage() {
           localStorage.setItem("crm_company_id", selectedCompanyId);
         }
 
-        setCompanyId(selectedCompanyId);
+        if (!selectedCompanyId) {
+          localStorage.removeItem("crm_company_id");
+          setCompanyId(null);
+          setSummary(null);
+          return;
+        }
+
+        const activeCompanyId = selectedCompanyId;
+        setCompanyId(activeCompanyId);
 
         const summaryRes = await fetch(
-          `${API_BASE}/api/v2/dashboard/summary?company_id=${encodeURIComponent(selectedCompanyId)}&days=30`
+          `${API_BASE}/api/v2/dashboard/summary?company_id=${encodeURIComponent(activeCompanyId)}&days=30`
         );
         const summaryData = await summaryRes.json();
 
