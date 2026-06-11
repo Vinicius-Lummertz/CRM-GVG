@@ -86,65 +86,9 @@ body {
   margin: 0.25rem 0;
 }
 
-.note-document-shell {
-  position: relative;
-  width: 100%;
-}
-
-.note-paper-stack {
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
-}
-
-.note-paper-page {
-  background:
-    linear-gradient(90deg, rgba(230, 57, 120, 0.06) 0 1px, transparent 1px 100%),
-    linear-gradient(#ffffff, #ffffff);
-  border: 1px solid #eadfe4;
-  box-shadow: 0 22px 55px -38px rgba(42, 27, 36, 0.45);
-  height: 980px;
-  left: 0;
-  position: absolute;
-  right: 0;
-}
-
-.note-paper-page span {
-  bottom: 22px;
-  color: #b8a3ad;
-  font-size: 11px;
-  position: absolute;
-  right: 34px;
-}
-
-.note-document-editor {
-  background: transparent;
-  border: 0;
+.note-editor {
+  font-size: 1rem;
   line-height: 1.75;
-  outline: none;
-  padding: 76px 86px;
-  position: relative;
-  z-index: 1;
-}
-
-.note-document-editor:focus {
-  outline: none;
-}
-
-.note-document-editor h2 {
-  font-size: 1.5rem;
-  margin-top: 1rem;
-}
-
-.note-document-editor p {
-  margin: 0.6rem 0;
-}
-
-@media (max-width: 900px) {
-  .note-document-editor {
-    padding: 48px 32px;
-  }
 }
 
 @keyframes fadeUp {

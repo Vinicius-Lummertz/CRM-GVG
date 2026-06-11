@@ -239,11 +239,17 @@ export default function AppPage() {
   const [newNotebookTitle, setNewNotebookTitle] = useState("");
   const [newNotebookColor, setNewNotebookColor] = useState(NOTEBOOK_COLORS[0]);
   const [creatingNotebook, setCreatingNotebook] = useState(false);
+  const [showNotebookModal, setShowNotebookModal] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
   const [noteEditorTitle, setNoteEditorTitle] = useState("");
   const [noteEditorHtml, setNoteEditorHtml] = useState("");
   const [noteEditorText, setNoteEditorText] = useState("");
+  const [noteDirty, setNoteDirty] = useState(false);
+  const [noteSaveStatus, setNoteSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteDirtyRef = useRef(false);
+  const savingNoteRef = useRef(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
@@ -454,6 +460,12 @@ export default function AppPage() {
     if (!companyId) return;
     void loadNotesWorkspace(companyId);
   }, [companyId]);
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!companyId) return;
@@ -760,6 +772,8 @@ export default function AppPage() {
       }
 
       setNewNotebookTitle("");
+      setNewNotebookColor(NOTEBOOK_COLORS[0]);
+      setShowNotebookModal(false);
       await loadNotesWorkspace(companyId);
     } catch (error) {
       setNotesError(error instanceof Error ? error.message : "Falha ao criar caderno.");
@@ -768,31 +782,78 @@ export default function AppPage() {
     }
   }
 
-  function selectNote(note: NoteItem | null) {
-    setSelectedNoteId(note?.id || null);
-    setNoteEditorTitle(note?.title || "");
-    setNoteEditorHtml(sanitizeNoteHtml(note?.content_html || ""));
-    setNoteEditorText(note?.content_text || "");
-    if (editorRef.current) {
-      editorRef.current.innerHTML = sanitizeNoteHtml(note?.content_html || "");
+  // Salva imediatamente a nota atual se houver alteracoes pendentes.
+  // Usado antes de trocar de nota/pagina para nao perder o auto-save em voo.
+  async function flushPendingSave() {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (noteDirtyRef.current) {
+      await saveCurrentNote({ silent: true });
     }
   }
 
-  function startNewNote() {
+  // selectNote NAO controla o innerHTML via render (isso resetava o cursor).
+  // O conteudo do editor e setado imperativamente aqui, so na troca de nota.
+  function selectNote(note: NoteItem | null) {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    const html = sanitizeNoteHtml(note?.content_html || "");
+    setSelectedNoteId(note?.id || null);
+    setNoteEditorTitle(note?.title || "");
+    setNoteEditorHtml(html);
+    setNoteEditorText(note?.content_text || "");
+    setNoteDirty(false);
+    noteDirtyRef.current = false;
+    setNoteSaveStatus("idle");
+    if (editorRef.current) {
+      editorRef.current.innerHTML = html || "<p></p>";
+    }
+  }
+
+  async function startNewNote() {
+    // Garante que a nota em edicao seja persistida antes de abrir uma nova.
+    await flushPendingSave();
+
     if (!selectedNotebookId && noteNotebooks[0]?.id) {
       setSelectedNotebookId(noteNotebooks[0].id);
     }
-    selectNote(null);
+    setSelectedNoteId(null);
     setNoteEditorTitle("Nova nota");
     setNoteEditorHtml("<p></p>");
     setNoteEditorText("");
+    if (editorRef.current) editorRef.current.innerHTML = "<p></p>";
+    setNoteDirty(true);
+    noteDirtyRef.current = true;
+    setNoteSaveStatus("idle");
     setTimeout(() => editorRef.current?.focus(), 0);
+    // Cria a pagina no servidor imediatamente (resolve o estado "vazio" fantasma).
+    void saveCurrentNote({ silent: true });
   }
 
   function syncEditorContent() {
     const html = sanitizeNoteHtml(editorRef.current?.innerHTML || "");
-    setNoteEditorHtml(html);
     setNoteEditorText(htmlToPlainText(html));
+    markNoteDirty();
+  }
+
+  function markNoteDirty() {
+    setNoteDirty(true);
+    noteDirtyRef.current = true;
+    setNoteSaveStatus("idle");
+    if (!canWorkNotes) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      void saveCurrentNote({ silent: true });
+    }, 3000);
+  }
+
+  function handleNoteTitleChange(value: string) {
+    setNoteEditorTitle(value);
+    markNoteDirty();
   }
 
   function formatNote(command: string, value?: string) {
@@ -801,35 +862,46 @@ export default function AppPage() {
     syncEditorContent();
   }
 
-  async function saveCurrentNote() {
+  async function saveCurrentNote(options: { silent?: boolean } = {}) {
+    const silent = options.silent === true;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
     if (!canWorkNotes) {
-      setNotesError("Seu perfil nao possui permissao para salvar notas.");
+      if (!silent) setNotesError("Seu perfil nao possui permissao para salvar notas.");
       return;
     }
     if (!companyId) return;
+    // Evita requisicoes concorrentes (ex.: auto-save disparando 2x cria nota duplicada).
+    if (savingNoteRef.current) return;
     const notebookId = selectedNotebookId || noteNotebooks[0]?.id;
     if (!notebookId) {
-      setNotesError("Crie um caderno antes de salvar notas.");
+      if (!silent) setNotesError("Crie um caderno antes de salvar notas.");
       return;
     }
 
     const title = noteEditorTitle.trim();
     if (!title) {
-      setNotesError("Informe um titulo para a nota.");
+      if (!silent) setNotesError("Informe um titulo para a nota.");
       return;
     }
 
     const html = sanitizeNoteHtml(editorRef.current?.innerHTML || noteEditorHtml);
     const text = htmlToPlainText(html);
-    const endpoint = selectedNoteId
+    const isUpdate = Boolean(selectedNoteId);
+    const endpoint = isUpdate
       ? `${API_BASE}/api/v2/notes/${selectedNoteId}`
       : `${API_BASE}/api/v2/notes`;
 
+    savingNoteRef.current = true;
     setSavingNote(true);
-    setNotesError(null);
+    setNoteSaveStatus("saving");
+    if (!silent) setNotesError(null);
     try {
       const response = await fetch(endpoint, {
-        method: selectedNoteId ? "PUT" : "POST",
+        method: isUpdate ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id: companyId,
@@ -849,25 +921,54 @@ export default function AppPage() {
 
       const savedNote = data.note as NoteItem;
       setSelectedNoteId(savedNote.id);
-      setNoteEditorHtml(sanitizeNoteHtml(savedNote.content_html || ""));
-      setNoteEditorText(savedNote.content_text || "");
-      await loadNotesWorkspace(companyId);
+      // NAO sobrescrevemos o innerHTML do editor aqui (resetaria o cursor).
+      // Mantemos o que o usuario ja tem; o backend so confirma o que enviamos.
+
+      // Se o conteudo nao mudou desde o envio, esta tudo salvo.
+      // Se o usuario continuou digitando, mantem dirty e reagenda o save.
+      const currentHtml = sanitizeNoteHtml(editorRef.current?.innerHTML || "");
+      const stillDirty = currentHtml !== html || noteEditorTitle.trim() !== title;
+      if (stillDirty) {
+        noteDirtyRef.current = true;
+        setNoteDirty(true);
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = setTimeout(() => void saveCurrentNote({ silent: true }), 3000);
+      } else {
+        noteDirtyRef.current = false;
+        setNoteDirty(false);
+        setNoteSaveStatus("saved");
+      }
+
+      // Atualizacao otimista da lista — sem recarregar o workspace inteiro.
+      setNotes((previous) => {
+        const exists = previous.some((note) => note.id === savedNote.id);
+        return exists
+          ? previous.map((note) => (note.id === savedNote.id ? savedNote : note))
+          : [savedNote, ...previous];
+      });
     } catch (error) {
+      setNoteSaveStatus("error");
       setNotesError(error instanceof Error ? error.message : "Falha ao salvar nota.");
     } finally {
+      savingNoteRef.current = false;
       setSavingNote(false);
     }
   }
 
   async function toggleNotePinned(note: NoteItem) {
     if (!companyId || !canWorkNotes) return;
+    const nextPinned = !note.is_pinned;
+    // Otimista: reflete na hora, reverte se falhar.
+    setNotes((previous) =>
+      previous.map((item) => (item.id === note.id ? { ...item, is_pinned: nextPinned } : item))
+    );
     try {
       const response = await fetch(`${API_BASE}/api/v2/notes/${note.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id: companyId,
-          is_pinned: !note.is_pinned,
+          is_pinned: nextPinned,
           updated_by: profileId || null
         }),
       });
@@ -875,27 +976,36 @@ export default function AppPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Falha ao fixar nota.");
       }
-      await loadNotesWorkspace(companyId);
     } catch (error) {
+      setNotes((previous) =>
+        previous.map((item) => (item.id === note.id ? { ...item, is_pinned: note.is_pinned } : item))
+      );
       setNotesError(error instanceof Error ? error.message : "Falha ao fixar nota.");
     }
   }
 
   async function deleteCurrentNote() {
     if (!companyId || !selectedNoteId || !canWorkNotes) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    const removedId = selectedNoteId;
+    const previousNotes = notes;
     setSavingNote(true);
     setNotesError(null);
+    // Otimista: remove da lista e seleciona a proxima pagina do caderno.
+    const remaining = notes.filter((note) => note.id !== removedId);
+    setNotes(remaining);
+    const nextNote = remaining.find((note) => !selectedNotebookId || note.notebook_id === selectedNotebookId) || null;
+    selectNote(nextNote);
     try {
-      const response = await fetch(`${API_BASE}/api/v2/notes/${selectedNoteId}?company_id=${encodeURIComponent(companyId)}`, {
+      const response = await fetch(`${API_BASE}/api/v2/notes/${removedId}?company_id=${encodeURIComponent(companyId)}`, {
         method: "DELETE",
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Falha ao remover nota.");
       }
-      selectNote(null);
-      await loadNotesWorkspace(companyId);
     } catch (error) {
+      setNotes(previousNotes);
       setNotesError(error instanceof Error ? error.message : "Falha ao remover nota.");
     } finally {
       setSavingNote(false);
@@ -1615,8 +1725,9 @@ export default function AppPage() {
               startNewNote={startNewNote}
               canWorkNotes={canWorkNotes}
               noteNotebooks={noteNotebooks}
-              saveCurrentNote={saveCurrentNote}
               savingNote={savingNote}
+              noteDirty={noteDirty}
+              noteSaveStatus={noteSaveStatus}
               notesError={notesError}
               loadingNotes={loadingNotes}
               selectedNotebookId={selectedNotebookId}
@@ -1630,6 +1741,9 @@ export default function AppPage() {
               newNotebookColor={newNotebookColor}
               createNotebook={createNotebook}
               creatingNotebook={creatingNotebook}
+              showNotebookModal={showNotebookModal}
+              setShowNotebookModal={setShowNotebookModal}
+              flushPendingSave={flushPendingSave}
               selectedNotebook={selectedNotebook}
               totalNotesInSelectedNotebook={totalNotesInSelectedNotebook}
               companyId={companyId}
@@ -1643,7 +1757,7 @@ export default function AppPage() {
               toggleNotePinned={toggleNotePinned}
               deleteCurrentNote={deleteCurrentNote}
               noteEditorTitle={noteEditorTitle}
-              setNoteEditorTitle={setNoteEditorTitle}
+              setNoteEditorTitle={handleNoteTitleChange}
               editorRef={editorRef}
               syncEditorContent={syncEditorContent}
               noteEditorHtml={noteEditorHtml}
