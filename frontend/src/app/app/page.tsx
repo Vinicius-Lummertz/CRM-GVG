@@ -47,6 +47,8 @@ type Lead = {
   phone: string;
   status: string;
   updated_at: string;
+  last_inbound_at?: string | null;
+  last_conversation_summary?: string | null;
   conversation_window?: {
     is_open: boolean;
     opened_at: string | null;
@@ -119,6 +121,15 @@ type ChatMessage = {
   content?: string | null;
   body?: string | null;
   created_at: string;
+  delivery_status?: string | null;
+};
+type Template = {
+  id: string;
+  name: string;
+  body: string;
+  language?: string | null;
+  category?: string | null;
+  content_sid: string;
 };
 type CompanyMember = {
   id: string;
@@ -188,15 +199,6 @@ function AppBootstrapSkeleton() {
       </div>
     </main>
   );
-}
-
-async function copyToClipboard(value: string) {
-  if (!value) return;
-  try {
-    await navigator.clipboard.writeText(value);
-  } catch {
-    // noop
-  }
 }
 
 export default function AppPage() {
@@ -280,6 +282,11 @@ export default function AppPage() {
   const [chatMessagesError, setChatMessagesError] = useState<string | null>(null);
   const [chatText, setChatText] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [chatTemplates, setChatTemplates] = useState<Template[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templateVars, setTemplateVars] = useState<Record<string, string>>({});
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newCompanyPhone, setNewCompanyPhone] = useState("");
   const [creatingCompany, setCreatingCompany] = useState(false);
@@ -427,28 +434,7 @@ export default function AppPage() {
 
   useEffect(() => {
     if (!companyId) return;
-    const activeCompanyId = companyId;
-
-    async function loadLeads() {
-      setLoadingLeads(true);
-      setLeadsError(null);
-      try {
-        const response = await fetch(
-          `${API_BASE}/api/v2/leads?company_id=${encodeURIComponent(activeCompanyId)}`
-        );
-        const data = await response.json();
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Falha ao carregar leads.");
-        }
-        setLeads((data.leads || []) as Lead[]);
-      } catch (error) {
-        setLeadsError(error instanceof Error ? error.message : "Falha ao carregar leads.");
-      } finally {
-        setLoadingLeads(false);
-      }
-    }
-
-    loadLeads();
+    void loadLeads();
   }, [companyId]);
 
   useEffect(() => {
@@ -1409,9 +1395,31 @@ export default function AppPage() {
   const chatStatus = (chatConnection?.status || "").toString().trim().toLowerCase();
   const isChatConnected = chatStatus === "conectado";
 
-  async function loadMessagesForLead(leadId: string) {
+  async function loadLeads(options?: { silent?: boolean }) {
     if (!companyId) return;
-    setLoadingChatMessages(true);
+    const silent = options?.silent === true;
+    if (!silent) setLoadingLeads(true);
+    setLeadsError(null);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v2/leads?company_id=${encodeURIComponent(companyId)}`
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao carregar leads.");
+      }
+      setLeads((data.leads || []) as Lead[]);
+    } catch (error) {
+      setLeadsError(error instanceof Error ? error.message : "Falha ao carregar leads.");
+    } finally {
+      if (!silent) setLoadingLeads(false);
+    }
+  }
+
+  async function loadMessagesForLead(leadId: string, options?: { silent?: boolean }) {
+    if (!companyId) return;
+    const silent = options?.silent === true;
+    if (!silent) setLoadingChatMessages(true);
     setChatMessagesError(null);
     try {
       const response = await fetch(
@@ -1425,7 +1433,7 @@ export default function AppPage() {
     } catch (error) {
       setChatMessagesError(error instanceof Error ? error.message : "Falha ao carregar mensagens.");
     } finally {
-      setLoadingChatMessages(false);
+      if (!silent) setLoadingChatMessages(false);
     }
   }
 
@@ -1472,28 +1480,79 @@ export default function AppPage() {
     }
   }
 
-  async function sendRestartTemplate() {
+  async function loadTemplates(options?: { silent?: boolean }) {
+    if (!companyId) return;
+    const silent = options?.silent === true;
+    if (!silent) setLoadingTemplates(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v2/templates?company_id=${encodeURIComponent(companyId)}`
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao carregar templates.");
+      }
+      setChatTemplates((data.templates || []) as Template[]);
+    } catch (error) {
+      setChatMessagesError(error instanceof Error ? error.message : "Falha ao carregar templates.");
+    } finally {
+      if (!silent) setLoadingTemplates(false);
+    }
+  }
+
+  async function syncTemplates() {
+    if (!companyId) return;
+    setSyncingTemplates(true);
+    setChatMessagesError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/templates/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao sincronizar templates.");
+      }
+      await loadTemplates({ silent: true });
+    } catch (error) {
+      setChatMessagesError(error instanceof Error ? error.message : "Falha ao sincronizar templates.");
+    } finally {
+      setSyncingTemplates(false);
+    }
+  }
+
+  async function sendSelectedTemplate() {
     if (!canWorkChat) {
       setChatMessagesError("Seu perfil nao possui permissao para enviar mensagens de abertura.");
       return;
     }
-    if (!companyId || !selectedChatLeadId || !selectedChatLead) return;
+    if (!companyId || !selectedChatLeadId) return;
+    const template = chatTemplates.find((t) => t.id === selectedTemplateId);
+    if (!template) {
+      setChatMessagesError("Selecione um template para enviar.");
+      return;
+    }
 
     setSendingChat(true);
     setChatMessagesError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v2/chat/send-restart`, {
+      const response = await fetch(`${API_BASE}/api/v2/chat/send-template`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company_id: companyId,
-          lead_id: selectedChatLeadId
+          lead_id: selectedChatLeadId,
+          content_sid: template.content_sid,
+          contentVariables: templateVars,
         }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
         throw new Error(data.message || data.error || "Falha ao enviar template.");
       }
+      setSelectedTemplateId(null);
+      setTemplateVars({});
       await loadMessagesForLead(selectedChatLeadId);
       await refreshLeads();
     } catch (error) {
@@ -1517,6 +1576,32 @@ export default function AppPage() {
     if (!selectedChatLeadId) return;
     void loadMessagesForLead(selectedChatLeadId);
   }, [selectedModule, isChatConnected, selectedChatLeadId, companyId]);
+
+  useEffect(() => {
+    if (selectedModule !== "chat") return;
+    if (!isChatConnected) return;
+    if (!companyId) return;
+    void loadTemplates({ silent: true });
+  }, [selectedModule, isChatConnected, companyId]);
+
+  // Atualizacao automatica do chat: enquanto o modulo de conversas esta aberto e
+  // conectado, recarrega a lista e a conversa selecionada a cada 10s sem piscar
+  // spinner. Pausa quando a aba esta em segundo plano para nao gastar requisicoes.
+  useEffect(() => {
+    if (selectedModule !== "chat") return;
+    if (!isChatConnected) return;
+    if (!companyId) return;
+
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void refreshLeads().catch(() => {});
+      if (selectedChatLeadId) {
+        void loadMessagesForLead(selectedChatLeadId, { silent: true });
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [selectedModule, isChatConnected, companyId, selectedChatLeadId]);
 
   const filteredTasks = tasks.filter((task) => {
     const lead = getLeadById(task.lead_id);
@@ -1770,6 +1855,7 @@ export default function AppPage() {
               companyId={companyId}
               selectedChatLeadId={selectedChatLeadId}
               loadMessagesForLead={loadMessagesForLead}
+              refreshLeads={refreshLeads}
               chatLeadSearch={chatLeadSearch}
               setChatLeadSearch={setChatLeadSearch}
               filteredChatLeads={filteredChatLeads}
@@ -1779,7 +1865,15 @@ export default function AppPage() {
               loadingChatMessages={loadingChatMessages}
               chatMessages={chatMessages}
               chatMessagesError={chatMessagesError}
-              sendRestartTemplate={sendRestartTemplate}
+              chatTemplates={chatTemplates}
+              loadingTemplates={loadingTemplates}
+              syncingTemplates={syncingTemplates}
+              syncTemplates={syncTemplates}
+              selectedTemplateId={selectedTemplateId}
+              setSelectedTemplateId={setSelectedTemplateId}
+              templateVars={templateVars}
+              setTemplateVars={setTemplateVars}
+              sendSelectedTemplate={sendSelectedTemplate}
               sendingChat={sendingChat}
               chatText={chatText}
               setChatText={setChatText}
@@ -1794,7 +1888,6 @@ export default function AppPage() {
               setChatMetaBusinessId={setChatMetaBusinessId}
               chatMetaPhoneId={chatMetaPhoneId}
               setChatMetaPhoneId={setChatMetaPhoneId}
-              copyToClipboard={copyToClipboard}
               saveChatConnection={saveChatConnection}
               markChatConnected={markChatConnected}
               savingChatConnection={savingChatConnection}

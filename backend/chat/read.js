@@ -24,14 +24,14 @@ module.exports = async (req, res) => {
     try {
         console.log(`[CRM] Marcando conversa como lida: ${leadId} | company_id=${companyId}`);
 
+        // NAO atualizamos updated_at aqui: a janela de 24h e calculada a partir de
+        // last_inbound_at, e marcar como lida e uma acao nossa que nao deve mexer nela.
+        // Apenas validamos que o lead existe nesta empresa.
         const { data, error } = await supabase
             .from('leads')
-            .update({
-                updated_at: new Date().toISOString()
-            })
+            .select('id')
             .eq('id', leadId)
             .eq('company_id', companyId)
-            .select('id')
             .maybeSingle();
 
         if (error) throw error;

@@ -6,7 +6,9 @@ const {
     getPreview,
     mapTwilioChatError,
     parseContentVariables,
-    resolveLeadPhone
+    renderTemplateBody,
+    resolveLeadPhone,
+    validateTemplateVariables
 } = require('./utils');
 const { isValidUuid } = require('../companies/utils');
 
@@ -36,34 +38,66 @@ module.exports = async (req, res) => {
     }
 
     const parsedVariables = parseContentVariables(contentVariables !== undefined ? contentVariables : variables);
+    if (parsedVariables === null) {
+        return res.status(400).json({
+            success: false,
+            error: "Variaveis do template invalidas. Envie um objeto JSON como { \"1\": \"valor\" }."
+        });
+    }
+
+    if (!content_sid) {
+        return res.status(400).json({
+            success: false,
+            error: "No schema atual, envie 'content_sid' diretamente para disparar templates."
+        });
+    }
 
     try {
-        const { data: leads, error: leadError } = await supabase
-            .from('leads')
-            .select('*')
-            .eq('id', lead_id)
-            .eq('company_id', company_id)
-            .limit(1);
+        // Busca lead e o template correspondente ao content_sid em paralelo. O template
+        // serve para validar as variaveis obrigatorias e gravar o texto real no historico.
+        const [{ data: leads, error: leadError }, { data: templates, error: templateError }] = await Promise.all([
+            supabase
+                .from('leads')
+                .select('*')
+                .eq('id', lead_id)
+                .eq('company_id', company_id)
+                .limit(1),
+            supabase
+                .from('templates')
+                .select('*')
+                .eq('company_id', company_id)
+                .eq('content_sid', content_sid)
+                .eq('is_active', 1)
+                .limit(1)
+        ]);
 
         if (leadError) throw leadError;
+        if (templateError) throw templateError;
         if (!leads || leads.length === 0) {
             return res.status(404).json({ success: false, error: "Lead nao encontrado." });
         }
 
         const lead = leads[0];
+        const template = templates && templates.length > 0 ? templates[0] : null;
+
         const normalizedPhone = resolveLeadPhone(lead, phone);
         if (!normalizedPhone.valid) {
             return res.status(400).json({ success: false, error: normalizedPhone.error });
         }
 
-        if (!content_sid) {
-            return res.status(400).json({
-                success: false,
-                error: "No schema atual, envie 'content_sid' diretamente para disparar templates."
-            });
+        // Se conhecemos o corpo do template, validamos que toda variavel ({{1}}, {{2}}...)
+        // foi preenchida antes de gastar um envio cobrado pela Meta.
+        if (template && template.body) {
+            const validation = validateTemplateVariables(template.body, parsedVariables);
+            if (!validation.valid) {
+                return res.status(400).json({ success: false, error: validation.error });
+            }
         }
 
-        const renderedBody = parsedVariables ? JSON.stringify(parsedVariables) : content_sid;
+        // Texto real que vai pro historico do CRM (em vez de salvar o JSON cru das variaveis).
+        const renderedBody = template && template.body
+            ? renderTemplateBody(template.body, parsedVariables)
+            : (Object.keys(parsedVariables).length > 0 ? JSON.stringify(parsedVariables) : content_sid);
 
         console.log(`[CRM] Enviando template content_sid=${content_sid} para lead ${lead_id}`);
 
@@ -96,7 +130,9 @@ module.exports = async (req, res) => {
                 has_media: false,
                 media_url: null,
                 sender_id: null,
-                created_at: now
+                created_at: now,
+                provider_message_id: message.sid,
+                delivery_status: 'queued'
             }]);
 
         if (insertError) {

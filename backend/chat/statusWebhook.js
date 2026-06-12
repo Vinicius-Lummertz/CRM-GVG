@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
         const { error } = await supabase
             .from('messages')
             .update({ delivery_status: deliveryStatus })
-            .or(`message_sid.eq.${messageSid},provider_message_id.eq.${messageSid}`);
+            .eq('provider_message_id', messageSid);
 
         if (error) throw error;
 

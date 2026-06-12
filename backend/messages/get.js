@@ -61,6 +61,7 @@ module.exports = async (req, res) => {
                 .update({
                     name: (ProfileName && lead.name === 'Sem nome') ? ProfileName : lead.name,
                     updated_at: now,
+                    last_inbound_at: now,
                     last_conversation_summary: Body || lead.last_conversation_summary
                 })
                 .eq('id', leadId)
@@ -82,7 +83,8 @@ module.exports = async (req, res) => {
                     name: ProfileName || 'Sem nome',
                     last_conversation_summary: Body || null,
                     created_at: now,
-                    updated_at: now
+                    updated_at: now,
+                    last_inbound_at: now
                 }]);
 
             if (insertError) throw insertError;
@@ -113,6 +115,7 @@ module.exports = async (req, res) => {
             .from('leads')
             .update({
                 updated_at: now,
+                last_inbound_at: now,
                 last_conversation_summary: Body || null
             })
             .eq('id', leadId)

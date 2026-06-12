@@ -90,7 +90,9 @@ module.exports = async (req, res) => {
                 has_media: false,
                 media_url: null,
                 sender_id: null,
-                created_at: now
+                created_at: now,
+                provider_message_id: message.sid,
+                delivery_status: 'queued'
             }]);
 
         if (insertError) {
