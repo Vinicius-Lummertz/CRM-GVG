@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type ChatModuleProps = {
   isChatConnected: boolean;
@@ -100,6 +100,31 @@ export function ChatModule({
   const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiBoxRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Posiciona a conversa no final (mensagens mais recentes) ao abrir/atualizar.
+  // useLayoutEffect rola de forma sincrona, antes da pintura, para evitar o
+  // "salto" visivel. Como imagens/videos so definem sua altura depois de
+  // carregar, escutamos o evento "load" das midias para re-rolar ate o fim.
+  useLayoutEffect(() => {
+    if (loadingChatMessages) return;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    scrollToBottom();
+
+    const medias = el.querySelectorAll("img, video");
+    medias.forEach((m) => m.addEventListener("load", scrollToBottom));
+    // <video> dispara "loadedmetadata" em vez de "load".
+    medias.forEach((m) => m.addEventListener("loadedmetadata", scrollToBottom));
+    return () => {
+      medias.forEach((m) => m.removeEventListener("load", scrollToBottom));
+      medias.forEach((m) => m.removeEventListener("loadedmetadata", scrollToBottom));
+    };
+  }, [selectedChatLeadId, loadingChatMessages, chatMessages]);
 
   const EMOJIS = [
     "😀", "😁", "😂", "🤣", "😊", "😍", "😘", "😎", "🤔", "😴",
@@ -330,7 +355,10 @@ export function ChatModule({
                   </p>
                 </div>
 
-                <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-[var(--line)] bg-[#fffdfd] p-3 lg:h-auto h-[430px]">
+                <div
+                  ref={messagesContainerRef}
+                  className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-[var(--line)] bg-[#fffdfd] p-3 lg:h-auto h-[430px]"
+                >
                   {loadingChatMessages ? (
                     <p className="text-xs text-[var(--muted)]">Carregando mensagens...</p>
                   ) : chatMessages.length === 0 ? (
