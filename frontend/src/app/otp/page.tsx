@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const COUNTRY_CODE = "55";
 const MASTER_PHONE = "554896290225";
@@ -162,7 +163,18 @@ export default function OtpPage() {
   }
 
   return (
-    <main className="hero-glow flex min-h-screen items-center justify-center px-6 py-10">
+    <main className="hero-glow flex min-h-screen flex-col px-6 py-6">
+      <header className="mx-auto flex w-full max-w-4xl items-center justify-center">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/70 px-4 py-2 text-sm font-medium text-[var(--muted)] backdrop-blur transition hover:border-pink-300 hover:text-[var(--foreground)]"
+        >
+          <span aria-hidden>←</span>
+          Voltar para o inicio
+        </Link>
+      </header>
+
+      <div className="flex flex-1 items-center justify-center py-8">
       <section className="fade-up grid w-full max-w-4xl overflow-hidden rounded-3xl border border-[var(--line)] bg-white shadow-[0_20px_50px_-35px_rgba(230,57,120,0.55)] md:grid-cols-[1.05fr_1fr]">
         {/* Painel lateral decorativo */}
         <aside className="relative hidden flex-col justify-between bg-gradient-to-br from-[var(--primary)] to-[var(--primary-strong)] p-9 text-white md:flex">
@@ -318,6 +330,7 @@ export default function OtpPage() {
           </p>
         </div>
       </section>
+      </div>
     </main>
   );
 }
