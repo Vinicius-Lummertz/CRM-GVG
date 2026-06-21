@@ -251,7 +251,53 @@ export function ChatModule({
                                 : "border border-[var(--line)] bg-white text-[var(--foreground)]"
                             }`}
                           >
-                            <p className="whitespace-pre-wrap break-words">{message.content || message.body || "-"}</p>
+                            {(() => {
+                              const label = (message.content || message.body || "").trim();
+                              const hasMedia = message.has_media && message.media_url;
+                              // O tipo da midia nao e gravado no banco; inferimos pelo rotulo
+                              // ([Imagem], [Vídeo]...) que o webhook salva em content.
+                              const isImage = /\[(Imagem|GIF|Figurinha)\]/i.test(label);
+                              const isVideo = /\[Vídeo\]/i.test(label);
+                              const isAudio = /\[Áudio\]/i.test(label);
+                              return (
+                                <>
+                                  {!hasMedia || (!isImage && !isVideo && !isAudio) ? (
+                                    <p className="whitespace-pre-wrap break-words">{label || "-"}</p>
+                                  ) : null}
+                                  {hasMedia ? (
+                                    <div className="mt-1">
+                                      {isImage ? (
+                                        <img
+                                          src={message.media_url || undefined}
+                                          alt={label || "Imagem recebida"}
+                                          className="max-h-60 max-w-full rounded-lg border border-black/5 object-contain"
+                                          loading="lazy"
+                                        />
+                                      ) : isVideo ? (
+                                        <video
+                                          src={message.media_url || undefined}
+                                          controls
+                                          className="max-h-60 max-w-full rounded-lg border border-black/5"
+                                        />
+                                      ) : isAudio ? (
+                                        <audio src={message.media_url || undefined} controls className="w-full" />
+                                      ) : (
+                                        <a
+                                          href={message.media_url || undefined}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={`inline-flex items-center gap-1 text-xs underline ${
+                                            outbound ? "text-white/90" : "text-[var(--primary)]"
+                                          }`}
+                                        >
+                                          Abrir mídia ↗
+                                        </a>
+                                      )}
+                                    </div>
+                                  ) : null}
+                                </>
+                              );
+                            })()}
                             <p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${outbound ? "text-white/80" : "text-[var(--muted)]"}`}>
                               <span>{new Date(message.created_at).toLocaleString("pt-BR")}</span>
                               {indicator ? (

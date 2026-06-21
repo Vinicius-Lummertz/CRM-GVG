@@ -122,6 +122,8 @@ type ChatMessage = {
   body?: string | null;
   created_at: string;
   delivery_status?: string | null;
+  has_media?: boolean | null;
+  media_url?: string | null;
 };
 type Template = {
   id: string;
@@ -1062,7 +1064,7 @@ export default function AppPage() {
   const modules = useMemo(
     () => [
       { id: "inicio", label: "Inicio", icon: "home" as IconName },
-      { id: "kanban", label: "Kanban", icon: "kanban" as IconName },
+      { id: "kanban", label: "Leads", icon: "kanban" as IconName },
       { id: "agenda", label: "Agenda", icon: "calendar" as IconName },
       { id: "tasks", label: "Tarefas", icon: "tasks" as IconName },
       { id: "notes", label: "Notas", icon: "notes" as IconName },
@@ -1429,7 +1431,17 @@ export default function AppPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Falha ao carregar mensagens.");
       }
-      setChatMessages((data.messages || []) as ChatMessage[]);
+      // A midia recebida fica autenticada no Twilio; trocamos a URL crua pelo proxy
+      // do backend, que injeta as credenciais e entrega o arquivo direto pro CRM.
+      const messages = ((data.messages || []) as ChatMessage[]).map((message) =>
+        message.has_media && message.media_url
+          ? {
+              ...message,
+              media_url: `${API_BASE}/api/v2/chat/media/${message.id}?company_id=${encodeURIComponent(companyId)}`,
+            }
+          : message
+      );
+      setChatMessages(messages);
     } catch (error) {
       setChatMessagesError(error instanceof Error ? error.message : "Falha ao carregar mensagens.");
     } finally {
