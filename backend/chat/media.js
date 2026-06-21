@@ -3,6 +3,10 @@ const { isValidUuid } = require('../companies/utils');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
+// Bucket onde ficam os anexos que NOS enviamos (vide chat/sendMedia.js). Esses media_url
+// vem com o prefixo `supabase://<caminho>` e sao servidos direto do Storage, sem Twilio.
+const STORAGE_BUCKET = 'Arquivos';
+
 // O Twilio so entrega a midia (figurinha, imagem, video, GIF, audio) mediante
 // autenticacao Basic com Account SID + Auth Token. Em vez de expor essas credenciais
 // no front, este endpoint busca a midia no Twilio e a repassa (stream) para o cliente.
@@ -19,15 +23,6 @@ module.exports = async (req, res) => {
         return res.status(400).json({
             success: false,
             error: "Parametro 'company_id' e obrigatorio e deve ser um UUID valido."
-        });
-    }
-
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_ACCOUNT_AUTH_TOKEN;
-    if (!accountSid || !authToken) {
-        return res.status(500).json({
-            success: false,
-            error: "Credenciais do Twilio nao configuradas no servidor."
         });
     }
 
@@ -56,6 +51,34 @@ module.exports = async (req, res) => {
         if (leadError) throw leadError;
         if (!lead) {
             return res.status(404).json({ success: false, error: "Midia nao encontrada." });
+        }
+
+        // Anexos que nos mesmos enviamos ficam no Storage do Supabase, nao no Twilio.
+        if (message.media_url.startsWith('supabase://')) {
+            const storagePath = message.media_url.slice('supabase://'.length);
+            const { data: fileData, error: downloadError } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .download(storagePath);
+
+            if (downloadError || !fileData) {
+                console.error(`[CRM] Falha ao baixar midia do Storage ${messageId}:`, downloadError);
+                return res.status(404).json({ success: false, error: "Midia nao encontrada." });
+            }
+
+            const contentType = fileData.type || 'application/octet-stream';
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'private, max-age=86400');
+            const buffer = Buffer.from(await fileData.arrayBuffer());
+            return res.status(200).send(buffer);
+        }
+
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_ACCOUNT_AUTH_TOKEN;
+        if (!accountSid || !authToken) {
+            return res.status(500).json({
+                success: false,
+                error: "Credenciais do Twilio nao configuradas no servidor."
+            });
         }
 
         const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');

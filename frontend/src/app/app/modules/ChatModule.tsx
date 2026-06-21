@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ChatModuleProps = {
   isChatConnected: boolean;
@@ -7,6 +7,7 @@ type ChatModuleProps = {
   selectedChatLeadId: string | null;
   loadMessagesForLead: (leadId: string) => void | Promise<void>;
   refreshLeads: () => void | Promise<void>;
+  createChatConversation: (name: string, phone: string) => Promise<boolean>;
   chatLeadSearch: string;
   setChatLeadSearch: (value: string) => void;
   filteredChatLeads: Array<any>;
@@ -29,6 +30,7 @@ type ChatModuleProps = {
   chatText: string;
   setChatText: (value: string) => void;
   sendChatMessage: () => void | Promise<void>;
+  sendChatMedia: (file: File, caption?: string) => Promise<boolean>;
   loadingChatConnection: boolean;
   chatConnection: any | null;
   chatPhone: string;
@@ -51,6 +53,7 @@ export function ChatModule({
   selectedChatLeadId,
   loadMessagesForLead,
   refreshLeads,
+  createChatConversation,
   chatLeadSearch,
   setChatLeadSearch,
   filteredChatLeads,
@@ -73,6 +76,7 @@ export function ChatModule({
   chatText,
   setChatText,
   sendChatMessage,
+  sendChatMedia,
   loadingChatConnection,
   chatConnection,
   chatPhone,
@@ -89,6 +93,79 @@ export function ChatModule({
 }: ChatModuleProps) {
   const [onboardingStep, setOnboardingStep] = useState(1);
   const phoneSaved = chatPhone.trim().length > 0;
+
+  // Anexos e emojis da barra de envio.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiBoxRef = useRef<HTMLDivElement | null>(null);
+
+  const EMOJIS = [
+    "😀", "😁", "😂", "🤣", "😊", "😍", "😘", "😎", "🤔", "😴",
+    "👍", "👎", "👏", "🙏", "💪", "🙌", "🤝", "👋", "✌️", "🤙",
+    "❤️", "🔥", "🎉", "✅", "❌", "⭐", "💯", "📎", "📅", "💰",
+  ];
+
+  // Fecha o seletor de emojis ao clicar fora dele.
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (emojiBoxRef.current && !emojiBoxRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
+
+  // Libera a URL de preview quando o arquivo muda ou some.
+  useEffect(() => {
+    return () => {
+      if (pendingFilePreview) URL.revokeObjectURL(pendingFilePreview);
+    };
+  }, [pendingFilePreview]);
+
+  function handlePickFile(file: File | null) {
+    if (pendingFilePreview) URL.revokeObjectURL(pendingFilePreview);
+    setPendingFile(file);
+    setPendingFilePreview(file && file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
+  }
+
+  function clearPendingFile() {
+    if (pendingFilePreview) URL.revokeObjectURL(pendingFilePreview);
+    setPendingFile(null);
+    setPendingFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleSend() {
+    if (pendingFile) {
+      const ok = await sendChatMedia(pendingFile, chatText);
+      if (ok) {
+        clearPendingFile();
+        setChatText("");
+      }
+      return;
+    }
+    void sendChatMessage();
+  }
+
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const [newConversationName, setNewConversationName] = useState("");
+  const [newConversationPhone, setNewConversationPhone] = useState("");
+  const [creatingConversation, setCreatingConversation] = useState(false);
+
+  async function handleCreateConversation() {
+    setCreatingConversation(true);
+    const ok = await createChatConversation(newConversationName, newConversationPhone);
+    setCreatingConversation(false);
+    if (ok) {
+      setNewConversationName("");
+      setNewConversationPhone("");
+      setShowNewConversation(false);
+    }
+  }
 
   const selectedTemplate = chatTemplates.find((t) => t.id === selectedTemplateId) || null;
 
@@ -156,19 +233,39 @@ export function ChatModule({
           </p>
         </div>
       ) : isChatConnected ? (
-        <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-          <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
+        <div className="grid gap-4 lg:grid-cols-[320px_1fr] lg:h-[calc(100vh-220px)]">
+          <div className="flex min-h-0 flex-col rounded-2xl border border-[var(--line)] bg-white p-4">
             <div className="mb-1 flex items-center justify-between">
               <p className="text-sm font-semibold text-[var(--foreground)]">Conversas</p>
-              <button
-                onClick={() => {
-                  void refreshLeads();
-                  if (selectedChatLeadId) void loadMessagesForLead(selectedChatLeadId);
-                }}
-                className="rounded-lg border border-[var(--line)] px-2 py-1 text-xs text-[var(--muted)] hover:bg-pink-50/40"
-              >
-                Atualizar
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    void refreshLeads();
+                    if (selectedChatLeadId) void loadMessagesForLead(selectedChatLeadId);
+                  }}
+                  title="Atualizar"
+                  aria-label="Atualizar"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] text-[var(--muted)] hover:bg-pink-50/40"
+                >
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] stroke-current fill-none" strokeWidth="1.8">
+                    <path d="M4 4v6h6" />
+                    <path d="M20 20v-6h-6" />
+                    <path d="M20 10a8 8 0 0 0-14.3-3.3L4 10" />
+                    <path d="M4 14a8 8 0 0 0 14.3 3.3L20 14" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setShowNewConversation(true)}
+                  title="Nova conversa"
+                  aria-label="Nova conversa"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--primary)] text-white hover:opacity-90"
+                >
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] stroke-current fill-none" strokeWidth="1.8">
+                    <path d="M20 15a3 3 0 0 1-3 3H9l-5 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3z" />
+                    <path d="M12 8.5v5M9.5 11h5" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <p className="mb-3 text-[10px] text-[var(--muted)]">Atualiza automaticamente a cada poucos segundos.</p>
             <input
@@ -177,7 +274,7 @@ export function ChatModule({
               placeholder="Buscar por nome ou telefone"
               className="mb-3 h-10 w-full rounded-xl border border-[var(--line)] px-3 text-sm"
             />
-            <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 lg:max-h-none max-h-[560px]">
               {filteredChatLeads.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
                   Nenhum lead encontrado.
@@ -222,7 +319,7 @@ export function ChatModule({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[var(--line)] bg-white p-4">
+          <div className="flex min-h-0 flex-col rounded-2xl border border-[var(--line)] bg-white p-4">
             {selectedChatLead ? (
               <>
                 <div className="border-b border-[var(--line)] pb-3">
@@ -233,7 +330,7 @@ export function ChatModule({
                   </p>
                 </div>
 
-                <div className="mt-3 h-[430px] space-y-2 overflow-y-auto rounded-xl border border-[var(--line)] bg-[#fffdfd] p-3">
+                <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-[var(--line)] bg-[#fffdfd] p-3 lg:h-auto h-[430px]">
                   {loadingChatMessages ? (
                     <p className="text-xs text-[var(--muted)]">Carregando mensagens...</p>
                   ) : chatMessages.length === 0 ? (
@@ -411,35 +508,174 @@ export function ChatModule({
                   </div>
                 ) : null}
 
-                <div className="mt-3 flex gap-2">
+                {pendingFile ? (
+                  <div className="mt-3 flex items-center gap-3 rounded-xl border border-[var(--line)] bg-pink-50/40 p-2">
+                    {pendingFilePreview ? (
+                      <img
+                        src={pendingFilePreview}
+                        alt={pendingFile.name}
+                        className="h-12 w-12 shrink-0 rounded-lg border border-black/5 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-pink-100 text-[var(--primary)]">
+                        <svg viewBox="0 0 24 24" className="h-5 w-5 stroke-current fill-none" strokeWidth="1.8">
+                          <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-[var(--foreground)]">{pendingFile.name}</p>
+                      <p className="text-[11px] text-[var(--muted)]">
+                        {(pendingFile.size / 1024).toFixed(0)} KB
+                      </p>
+                    </div>
+                    <button
+                      onClick={clearPendingFile}
+                      aria-label="Remover anexo"
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--line)] text-[var(--muted)] hover:bg-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="relative mt-3 flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      handlePickFile(file);
+                    }}
+                  />
+
+                  <button
+                    onClick={() => setShowEmojiPicker((v) => !v)}
+                    disabled={!selectedLeadWindowOpen}
+                    title="Emojis"
+                    aria-label="Emojis"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--line)] text-[var(--muted)] hover:bg-pink-50/40 disabled:opacity-50"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5 stroke-current fill-none" strokeWidth="1.8">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M8 14a4 4 0 0 0 8 0" />
+                      <path d="M9 9h.01M15 9h.01" />
+                    </svg>
+                  </button>
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!selectedLeadWindowOpen}
+                    title="Anexar arquivo"
+                    aria-label="Anexar arquivo"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--line)] text-[var(--muted)] hover:bg-pink-50/40 disabled:opacity-50"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5 stroke-current fill-none" strokeWidth="1.8">
+                      <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  </button>
+
+                  {showEmojiPicker ? (
+                    <div
+                      ref={emojiBoxRef}
+                      className="absolute bottom-14 left-0 z-10 grid w-64 grid-cols-8 gap-1 rounded-xl border border-[var(--line)] bg-white p-2 shadow-lg"
+                    >
+                      {EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            setChatText(chatText + emoji);
+                            setShowEmojiPicker(false);
+                          }}
+                          className="flex h-7 w-7 items-center justify-center rounded text-lg hover:bg-pink-50"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
                   <input
                     value={chatText}
                     onChange={(e) => setChatText(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        void sendChatMessage();
+                        void handleSend();
                       }
                     }}
-                    placeholder="Digite uma mensagem..."
+                    placeholder={pendingFile ? "Adicione uma legenda (opcional)..." : "Digite uma mensagem..."}
                     disabled={!selectedLeadWindowOpen}
                     className="h-11 flex-1 rounded-xl border border-[var(--line)] px-3 text-sm disabled:bg-zinc-100"
                   />
                   <button
-                    onClick={sendChatMessage}
-                    disabled={sendingChat || !chatText.trim() || !selectedLeadWindowOpen}
+                    onClick={handleSend}
+                    disabled={sendingChat || (!chatText.trim() && !pendingFile) || !selectedLeadWindowOpen}
                     className="h-11 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    Enviar
+                    {sendingChat ? "Enviando..." : "Enviar"}
                   </button>
                 </div>
               </>
             ) : (
-              <div className="flex h-[520px] items-center justify-center rounded-xl border border-dashed border-[var(--line)] text-sm text-[var(--muted)]">
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--line)] text-sm text-[var(--muted)] lg:h-auto h-[520px]">
                 Selecione uma conversa na lista ao lado.
               </div>
             )}
           </div>
+
+          {showNewConversation ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+              <div className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-white p-5 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <p className="text-base font-semibold text-[var(--foreground)]">Nova conversa</p>
+                  <button
+                    onClick={() => setShowNewConversation(false)}
+                    aria-label="Fechar"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--line)] text-[var(--muted)] hover:bg-pink-50/40"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[var(--foreground)]">Nome</label>
+                    <input
+                      value={newConversationName}
+                      onChange={(e) => setNewConversationName(e.target.value)}
+                      placeholder="Nome do contato"
+                      className="h-11 w-full rounded-xl border border-[var(--line)] px-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[var(--foreground)]">Telefone</label>
+                    <input
+                      value={newConversationPhone}
+                      onChange={(e) => setNewConversationPhone(e.target.value)}
+                      placeholder="+55 (11) 90000-0000"
+                      className="h-11 w-full rounded-xl border border-[var(--line)] px-3 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="mt-5 flex gap-2">
+                  <button
+                    onClick={() => setShowNewConversation(false)}
+                    className="h-11 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-medium text-[var(--muted)]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreateConversation}
+                    disabled={creatingConversation || !newConversationName.trim() || !newConversationPhone.trim()}
+                    className="h-11 flex-1 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {creatingConversation ? "Criando..." : "Iniciar conversa"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="mx-auto max-w-2xl">

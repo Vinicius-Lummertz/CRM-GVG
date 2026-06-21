@@ -612,6 +612,51 @@ export default function AppPage() {
     }
   }
 
+  // Cria um lead direto da tela de chat e ja o seleciona para iniciar a conversa.
+  async function createChatConversation(name: string, phone: string): Promise<boolean> {
+    if (!canWorkChat) {
+      setChatMessagesError("Seu perfil nao possui permissao para iniciar conversas.");
+      return false;
+    }
+    if (!companyId) {
+      setChatMessagesError("Empresa nao identificada para iniciar conversa.");
+      return false;
+    }
+    const trimmedName = name.trim();
+    const normalizedPhone = phone.trim();
+    if (!trimmedName || !normalizedPhone) {
+      setChatMessagesError("Preencha nome e telefone para iniciar a conversa.");
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/leads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          phone: normalizedPhone,
+          company_id: companyId,
+          assigned_to: profileId || null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao iniciar conversa.");
+      }
+      await refreshLeads();
+      const newLeadId = data.lead?.id || data.id || null;
+      if (newLeadId) {
+        setSelectedChatLeadId(newLeadId);
+        void loadMessagesForLead(newLeadId);
+      }
+      return true;
+    } catch (error) {
+      setChatMessagesError(error instanceof Error ? error.message : "Falha ao iniciar conversa.");
+      return false;
+    }
+  }
+
   async function createTask() {
     if (!canWorkTasksCalendar) {
       setTasksError("Seu perfil nao possui permissao para criar tasks.");
@@ -1492,6 +1537,49 @@ export default function AppPage() {
     }
   }
 
+  async function sendChatMedia(file: File, caption?: string): Promise<boolean> {
+    if (!canWorkChat) {
+      setChatMessagesError("Seu perfil nao possui permissao para enviar mensagens.");
+      return false;
+    }
+    if (!companyId || !selectedChatLeadId || !file) return false;
+
+    setSendingChat(true);
+    setChatMessagesError(null);
+    try {
+      const formData = new FormData();
+      formData.append("company_id", companyId);
+      formData.append("lead_id", selectedChatLeadId);
+      if (caption && caption.trim()) formData.append("caption", caption.trim());
+      formData.append("file", file);
+
+      const response = await fetch(`${API_BASE}/api/v2/chat/send-media`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        if (data?.error === "WINDOW_CLOSED") {
+          throw new Error("WINDOW_CLOSED");
+        }
+        throw new Error(data.message || data.error || "Falha ao enviar arquivo.");
+      }
+      await loadMessagesForLead(selectedChatLeadId);
+      await refreshLeads();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao enviar arquivo.";
+      if (message === "WINDOW_CLOSED") {
+        setChatMessagesError("Janela de 24h fechada. Envie um template para reabrir a conversa.");
+      } else {
+        setChatMessagesError(message);
+      }
+      return false;
+    } finally {
+      setSendingChat(false);
+    }
+  }
+
   async function loadTemplates(options?: { silent?: boolean }) {
     if (!companyId) return;
     const silent = options?.silent === true;
@@ -1708,7 +1796,7 @@ export default function AppPage() {
 
   return (
     <main className="hero-glow min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-[1500px]">
+      <div className="flex min-h-screen">
         <Sidebar
           sidebarCollapsed={sidebarCollapsed}
           setSidebarCollapsed={setSidebarCollapsed}
@@ -1868,6 +1956,7 @@ export default function AppPage() {
               selectedChatLeadId={selectedChatLeadId}
               loadMessagesForLead={loadMessagesForLead}
               refreshLeads={refreshLeads}
+              createChatConversation={createChatConversation}
               chatLeadSearch={chatLeadSearch}
               setChatLeadSearch={setChatLeadSearch}
               filteredChatLeads={filteredChatLeads}
@@ -1890,6 +1979,7 @@ export default function AppPage() {
               chatText={chatText}
               setChatText={setChatText}
               sendChatMessage={sendChatMessage}
+              sendChatMedia={sendChatMedia}
               loadingChatConnection={loadingChatConnection}
               chatConnection={chatConnection}
               chatPhone={chatPhone}

@@ -1,6 +1,11 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+
+// Upload de anexos do chat: guardamos em memoria (o arquivo segue direto pro Storage)
+// e limitamos a 5MB, que e o teto pratico de midia do WhatsApp/Twilio.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const messagesGet = require('./messages/get');
 const messagesSendOtp = require('./messages/send/otp');
@@ -9,6 +14,7 @@ const chatMessages = require('./chat/messages');
 const chatMedia = require('./chat/media');
 const chatRead = require('./chat/read');
 const chatSendText = require('./chat/sendText');
+const chatSendMedia = require('./chat/sendMedia');
 const chatSendTemplate = require('./chat/sendTemplate');
 const chatSendRestart = require('./chat/sendRestart');
 const chatStatusWebhook = require('./chat/statusWebhook');
@@ -82,6 +88,7 @@ app.get('/api/v2/chat/:leadId/messages', chatMessages);
 app.get('/api/v2/chat/media/:messageId', chatMedia);
 app.post('/api/v2/chat/:leadId/read', chatRead);
 app.post('/api/v2/chat/send', chatSendText);
+app.post('/api/v2/chat/send-media', upload.single('file'), chatSendMedia);
 app.post('/api/v2/chat/send-template', chatSendTemplate);
 app.post('/api/v2/chat/send-restart', chatSendRestart);
 app.post('/api/v2/chat/status-webhook', chatStatusWebhook);
