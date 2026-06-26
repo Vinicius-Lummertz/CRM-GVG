@@ -1,15 +1,18 @@
 import { useMemo, useRef, useState } from "react";
-import type { DocumentType, LeadDetails } from "../shared";
+import type { DocumentType, LeadBudget, LeadDetails } from "../shared";
 import {
   fetchAddressByCep,
+  formatCurrencyBRL,
   isValidDocument,
   maskCep,
+  maskCurrency,
   maskDocument,
   onlyDigits,
+  parseCurrency,
 } from "./leadFormat";
 
 // Campos cadastrais opcionais para aceitar o tipo Lead da pagina sem conversao.
-export type LeadForDrawer = Partial<LeadDetails> & {
+export type LeadForDrawer = Partial<LeadDetails> & Partial<LeadBudget> & {
   id: string;
   phone: string;
   status: string;
@@ -22,6 +25,8 @@ type LeadDetailDrawerProps = {
   onClose: () => void;
   // Recebe somente os campos editaveis; deve retornar true em caso de sucesso.
   onSave: (leadId: string, details: LeadDetails) => Promise<boolean>;
+  // Persiste os campos de orcamento; deve retornar true em caso de sucesso.
+  onSaveBudget: (leadId: string, budget: LeadBudget) => Promise<boolean>;
   saving: boolean;
   canEdit: boolean;
   error?: string | null;
@@ -71,11 +76,31 @@ const inputClass =
   "h-11 w-full rounded-xl border border-[var(--line)] bg-white px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] disabled:bg-[var(--line)]/30";
 const labelClass = "mb-1 block text-xs font-medium text-[var(--muted)]";
 
+type BudgetForm = {
+  final_budget: string;
+  contract_start: string;
+  contract_end: string;
+  budget_notes: string;
+};
+
+function toBudgetForm(lead: LeadForDrawer): BudgetForm {
+  return {
+    final_budget:
+      lead.final_budget !== null && lead.final_budget !== undefined
+        ? maskCurrency(String(Math.round(lead.final_budget * 100)))
+        : "",
+    contract_start: lead.contract_start ?? "",
+    contract_end: lead.contract_end ?? "",
+    budget_notes: lead.budget_notes ?? "",
+  };
+}
+
 export function LeadDetailDrawer({
   lead,
   open,
   onClose,
   onSave,
+  onSaveBudget,
   saving,
   canEdit,
   error,
@@ -86,6 +111,13 @@ export function LeadDetailDrawer({
   const [cepStatus, setCepStatus] = useState<"idle" | "loading" | "error">("idle");
   const [localError, setLocalError] = useState<string | null>(null);
   const lastCepLookup = useRef<string>(onlyDigits(lead?.zip_code ?? ""));
+
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetForm, setBudgetForm] = useState<BudgetForm>(() =>
+    lead ? toBudgetForm(lead) : { final_budget: "", contract_start: "", contract_end: "", budget_notes: "" }
+  );
+  const [budgetError, setBudgetError] = useState<string | null>(null);
+  const hasBudget = lead?.final_budget !== null && lead?.final_budget !== undefined;
 
   const documentType: DocumentType = form.document_type === "cnpj" ? "cnpj" : "cpf";
 
@@ -149,6 +181,41 @@ export function LeadDetailDrawer({
     if (ok) onClose();
   }
 
+  function openBudgetModal() {
+    if (!lead) return;
+    setBudgetForm(toBudgetForm(lead));
+    setBudgetError(null);
+    setShowBudgetModal(true);
+  }
+
+  async function handleSaveBudget() {
+    if (!lead) return;
+    const total = parseCurrency(budgetForm.final_budget);
+    if (total === null || total <= 0) {
+      setBudgetError("Informe o valor total do orcamento.");
+      return;
+    }
+    if (
+      budgetForm.contract_start &&
+      budgetForm.contract_end &&
+      budgetForm.contract_end < budgetForm.contract_start
+    ) {
+      setBudgetError("A data final do contrato nao pode ser anterior ao inicio.");
+      return;
+    }
+    setBudgetError(null);
+
+    const payload: LeadBudget = {
+      final_budget: total,
+      contract_start: budgetForm.contract_start || null,
+      contract_end: budgetForm.contract_end || null,
+      budget_notes: budgetForm.budget_notes.trim() || null,
+    };
+
+    const ok = await onSaveBudget(lead.id, payload);
+    if (ok) setShowBudgetModal(false);
+  }
+
   if (!open || !lead) return null;
 
   const shownError = localError || error;
@@ -181,6 +248,28 @@ export function LeadDetailDrawer({
           {shownError ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {shownError}
+            </div>
+          ) : null}
+
+          {/* Orcamento */}
+          <button
+            type="button"
+            onClick={openBudgetModal}
+            disabled={!canEdit}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-[0_18px_35px_-18px_rgba(5,150,105,0.8)] transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="text-xl leading-none">+</span>
+            {hasBudget ? "Editar orcamento" : "Adicionar orcamento"}
+          </button>
+          {hasBudget ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <p className="font-semibold">{formatCurrencyBRL(lead.final_budget)}</p>
+              {lead.contract_start ? (
+                <p className="mt-0.5 text-xs text-emerald-700">
+                  Contrato: {formatDate(lead.contract_start)}
+                  {lead.contract_end ? ` ate ${formatDate(lead.contract_end)}` : ""}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -368,6 +457,98 @@ export function LeadDetailDrawer({
           </footer>
         ) : null}
       </aside>
+
+      {showBudgetModal ? (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-semibold text-[var(--foreground)]">
+              {hasBudget ? "Editar orcamento" : "Adicionar orcamento"}
+            </h3>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Vincule o valor do contrato ao faturamento do dashboard.
+            </p>
+
+            {budgetError ? (
+              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {budgetError}
+              </div>
+            ) : null}
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className={labelClass}>Valor total</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--muted)]">
+                    R$
+                  </span>
+                  <input
+                    className={`${inputClass} pl-9`}
+                    value={budgetForm.final_budget}
+                    onChange={(e) =>
+                      setBudgetForm((prev) => ({ ...prev, final_budget: maskCurrency(e.target.value) }))
+                    }
+                    placeholder="0,00"
+                    inputMode="numeric"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>Inicio do contrato</label>
+                  <input
+                    className={inputClass}
+                    type="date"
+                    value={budgetForm.contract_start}
+                    onChange={(e) =>
+                      setBudgetForm((prev) => ({ ...prev, contract_start: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Final (opcional)</label>
+                  <input
+                    className={inputClass}
+                    type="date"
+                    value={budgetForm.contract_end}
+                    onChange={(e) =>
+                      setBudgetForm((prev) => ({ ...prev, contract_end: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Observacoes</label>
+                <textarea
+                  className="min-h-[80px] w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+                  value={budgetForm.budget_notes}
+                  onChange={(e) =>
+                    setBudgetForm((prev) => ({ ...prev, budget_notes: e.target.value }))
+                  }
+                  placeholder="Detalhes do orcamento, condicoes, etc."
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBudgetModal(false)}
+                className="h-10 rounded-xl border border-[var(--line)] px-4 text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBudget}
+                disabled={saving}
+                className="h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-70"
+              >
+                {saving ? "Salvando..." : "Salvar orcamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

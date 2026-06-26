@@ -13,7 +13,7 @@ import { KanbanModule } from "./modules/KanbanModule";
 import { NotesModule } from "./modules/NotesModule";
 import { TasksModule } from "./modules/TasksModule";
 import { LeadDetailDrawer } from "./modules/LeadDetailDrawer";
-import { KANBAN_COLUMNS, type DocumentType, type IconName, type LeadDetails } from "./shared";
+import { KANBAN_COLUMNS, type DocumentType, type IconName, type LeadBudget, type LeadDetails } from "./shared";
 
 type Session = {
   phone: string;
@@ -62,6 +62,10 @@ type Lead = {
   neighborhood?: string | null;
   city?: string | null;
   state?: string | null;
+  final_budget?: number | null;
+  contract_start?: string | null;
+  contract_end?: string | null;
+  budget_notes?: string | null;
   conversation_window?: {
     is_open: boolean;
     opened_at: string | null;
@@ -618,6 +622,39 @@ export default function AppPage() {
       return true;
     } catch (error) {
       setLeadDetailsError(error instanceof Error ? error.message : "Falha ao atualizar lead.");
+      return false;
+    } finally {
+      setSavingLeadDetails(false);
+    }
+  }
+
+  async function updateLeadBudget(leadId: string, budget: LeadBudget): Promise<boolean> {
+    if (!canManageOperations) {
+      setLeadDetailsError("Seu perfil nao possui permissao para editar leads.");
+      return false;
+    }
+    if (!companyId) {
+      setLeadDetailsError("Empresa nao identificada para editar lead.");
+      return false;
+    }
+
+    setSavingLeadDetails(true);
+    setLeadDetailsError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/leads/${leadId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...budget, company_id: companyId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao salvar orcamento.");
+      }
+
+      setLeads((prev) => prev.map((lead) => (lead.id === leadId ? { ...lead, ...(data.lead as Lead) } : lead)));
+      return true;
+    } catch (error) {
+      setLeadDetailsError(error instanceof Error ? error.message : "Falha ao salvar orcamento.");
       return false;
     } finally {
       setSavingLeadDetails(false);
@@ -2145,6 +2182,7 @@ export default function AppPage() {
         open={Boolean(detailLead)}
         onClose={() => setDetailLeadId(null)}
         onSave={updateLeadDetails}
+        onSaveBudget={updateLeadBudget}
         saving={savingLeadDetails}
         canEdit={canManageOperations}
         error={leadDetailsError}

@@ -1,9 +1,23 @@
 import { KANBAN_COLUMNS } from "../shared";
+import { formatCurrencyBRL } from "./leadFormat";
+
+type KanbanCardLead = {
+  id: string;
+  name: string | null;
+  phone: string;
+  final_budget?: number | null;
+};
+
+// Coluna -> rotulo do total monetario exibido abaixo do titulo.
+const COLUMN_TOTAL_LABEL: Record<string, string> = {
+  proposta: "Possiveis ganhos",
+  fechado: "Valor arrecadado",
+};
 
 type KanbanModuleProps = {
   leadsError: string | null;
   loadingLeads: boolean;
-  leadsByColumn: Record<string, Array<{ id: string; name: string | null; phone: string }>>;
+  leadsByColumn: Record<string, KanbanCardLead[]>;
   moveLead: (leadId: string, targetColumnId: string) => void;
   showLeadModal: boolean;
   setShowLeadModal: (value: boolean) => void;
@@ -56,11 +70,28 @@ export function KanbanModule({
             }}
             className="min-h-[480px] rounded-2xl border border-[var(--line)] bg-white p-3"
           >
-            <div className="mb-3 flex items-center justify-between px-1">
-              <p className="text-sm font-semibold text-[var(--foreground)]">{column.label}</p>
-              <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-[var(--primary)]">
-                {loadingLeads ? "-" : leadsByColumn[column.id]?.length || 0}
-              </span>
+            <div className="mb-3 px-1">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-[var(--foreground)]">{column.label}</p>
+                <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-[var(--primary)]">
+                  {loadingLeads ? "-" : leadsByColumn[column.id]?.length || 0}
+                </span>
+              </div>
+              {COLUMN_TOTAL_LABEL[column.id] ? (
+                <p className="mt-1 text-xs text-emerald-700">
+                  {COLUMN_TOTAL_LABEL[column.id]}:{" "}
+                  <span className="font-semibold">
+                    {loadingLeads
+                      ? "-"
+                      : formatCurrencyBRL(
+                          (leadsByColumn[column.id] || []).reduce(
+                            (sum, lead) => sum + (lead.final_budget ?? 0),
+                            0
+                          )
+                        )}
+                  </span>
+                </p>
+              ) : null}
             </div>
             <div className="space-y-3">
               {(leadsByColumn[column.id] || []).map((lead) => (

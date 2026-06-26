@@ -18,6 +18,14 @@ export type LeadDetails = {
   state: string | null;
 };
 
+// Campos de orcamento do lead, vinculados ao faturamento do dashboard.
+export type LeadBudget = {
+  final_budget: number | null;
+  contract_start: string | null;
+  contract_end: string | null;
+  budget_notes: string | null;
+};
+
 export type KanbanColumn = {
   id: string;
   label: string;

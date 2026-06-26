@@ -31,6 +31,27 @@ export function maskCep(value: string): string {
   return digits.replace(/^(\d{5})(\d)/, "$1-$2");
 }
 
+// Mascara de moeda em reais a partir dos digitos (os 2 ultimos sao centavos).
+// Ex.: "150000" -> "1.500,00". Retorna "" quando nao ha digitos.
+export function maskCurrency(value: string): string {
+  const digits = onlyDigits(value).slice(0, 13);
+  if (!digits) return "";
+  const number = Number(digits) / 100;
+  return number.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Converte o texto mascarado de moeda para numero (reais). "" -> null.
+export function parseCurrency(masked: string): number | null {
+  const digits = onlyDigits(masked);
+  if (!digits) return null;
+  return Number(digits) / 100;
+}
+
+// Formata um numero (reais) como moeda brasileira para exibicao.
+export function formatCurrencyBRL(value: number | null | undefined): string {
+  return (value ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 export function isValidCpf(value: string): boolean {
   const digits = onlyDigits(value);
   if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return false;
