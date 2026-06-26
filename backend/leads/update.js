@@ -15,8 +15,11 @@ const TEXT_FIELDS = [
     'complement',
     'neighborhood',
     'city',
-    'state'
+    'state',
+    'budget_notes'
 ];
+
+const DATE_FIELDS = ['contract_start', 'contract_end'];
 
 const VALID_DOCUMENT_TYPES = ['cpf', 'cnpj'];
 
@@ -28,6 +31,7 @@ function normalizeText(value) {
 
 function buildUpdatePayload(body) {
     const payload = {};
+    let dateError = null;
 
     TEXT_FIELDS.forEach((field) => {
         if (Object.prototype.hasOwnProperty.call(body, field)) {
@@ -56,6 +60,35 @@ function buildUpdatePayload(body) {
             return { error: "birthday invalido. Use o formato AAAA-MM-DD." };
         } else {
             payload.birthday = raw;
+        }
+    }
+
+    DATE_FIELDS.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(body, field)) {
+            const raw = normalizeText(body[field]);
+            if (raw === null) {
+                payload[field] = null;
+            } else if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+                dateError = `${field} invalido. Use o formato AAAA-MM-DD.`;
+            } else {
+                payload[field] = raw;
+            }
+        }
+    });
+    if (dateError) {
+        return { error: dateError };
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'final_budget')) {
+        const raw = body.final_budget;
+        if (raw === null || raw === undefined || raw === '') {
+            payload.final_budget = null;
+        } else {
+            const parsed = Number(raw);
+            if (!Number.isFinite(parsed) || parsed < 0) {
+                return { error: "final_budget invalido. Informe um valor numerico nao negativo." };
+            }
+            payload.final_budget = parsed;
         }
     }
 
