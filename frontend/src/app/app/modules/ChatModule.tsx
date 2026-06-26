@@ -13,7 +13,9 @@ type ChatModuleProps = {
   filteredChatLeads: Array<any>;
   setSelectedChatLeadId: (value: string) => void;
   selectedChatLead: any | null;
+  openLeadDetails: (leadId: string) => void;
   selectedLeadWindowOpen: boolean;
+  selectedLeadTemplateSent: boolean;
   loadingChatMessages: boolean;
   chatMessages: Array<any>;
   chatMessagesError: string | null;
@@ -59,7 +61,9 @@ export function ChatModule({
   filteredChatLeads,
   setSelectedChatLeadId,
   selectedChatLead,
+  openLeadDetails,
   selectedLeadWindowOpen,
+  selectedLeadTemplateSent,
   loadingChatMessages,
   chatMessages,
   chatMessagesError,
@@ -347,12 +351,21 @@ export function ChatModule({
           <div className="flex min-h-0 flex-col rounded-2xl border border-[var(--line)] bg-white p-4">
             {selectedChatLead ? (
               <>
-                <div className="border-b border-[var(--line)] pb-3">
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{selectedChatLead.name || "Sem nome"}</p>
-                  <p className="text-xs text-[var(--muted)]">{selectedChatLead.phone}</p>
-                  <p className={`mt-1 text-xs ${selectedLeadWindowOpen ? "text-emerald-700" : "text-amber-700"}`}>
-                    {selectedLeadWindowOpen ? "Janela 24h: aberta" : "Janela 24h: fechada (use template)"}
-                  </p>
+                <div className="flex items-start justify-between border-b border-[var(--line)] pb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{selectedChatLead.name || "Sem nome"}</p>
+                    <p className="text-xs text-[var(--muted)]">{selectedChatLead.phone}</p>
+                    <p className={`mt-1 text-xs ${selectedLeadWindowOpen ? "text-emerald-700" : "text-amber-700"}`}>
+                      {selectedLeadWindowOpen ? "Janela 24h: aberta" : "Janela 24h: fechada (use template)"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openLeadDetails(selectedChatLead.id)}
+                    className="shrink-0 rounded-xl border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] hover:border-[var(--primary)]"
+                  >
+                    Ver dados
+                  </button>
                 </div>
 
                 <div
@@ -442,7 +455,20 @@ export function ChatModule({
                   <p className="mt-2 text-xs text-rose-600">{chatMessagesError}</p>
                 ) : null}
 
-                {!selectedLeadWindowOpen ? (
+                {!selectedLeadWindowOpen && selectedLeadTemplateSent ? (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="flex items-start gap-2">
+                      <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 stroke-emerald-600 fill-none" strokeWidth="2">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                      <p className="text-xs text-emerald-800">
+                        <span className="font-semibold">Template enviado.</span> Aguarde o retorno do
+                        cliente: a janela de 24h para mensagens livres só é liberada depois que ele
+                        responder.
+                      </p>
+                    </div>
+                  </div>
+                ) : !selectedLeadWindowOpen ? (
                   <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-xs text-amber-800">

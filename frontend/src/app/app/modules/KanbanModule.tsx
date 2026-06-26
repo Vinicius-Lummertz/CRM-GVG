@@ -13,6 +13,7 @@ type KanbanModuleProps = {
   setLeadPhone: (value: string) => void;
   createLeadManually: () => void;
   creatingLead: boolean;
+  openLeadDetails: (leadId: string) => void;
 };
 
 export function KanbanModule({
@@ -28,6 +29,7 @@ export function KanbanModule({
   setLeadPhone,
   createLeadManually,
   creatingLead,
+  openLeadDetails,
 }: KanbanModuleProps) {
   return (
     <div className="space-y-4">
@@ -69,7 +71,9 @@ export function KanbanModule({
                     event.dataTransfer.setData("text/lead-id", lead.id);
                     event.dataTransfer.effectAllowed = "move";
                   }}
-                  className="cursor-grab rounded-xl border border-pink-100 bg-pink-50/70 p-3 active:cursor-grabbing"
+                  onClick={() => openLeadDetails(lead.id)}
+                  className="cursor-grab rounded-xl border border-pink-100 bg-pink-50/70 p-3 transition hover:border-[var(--primary)] active:cursor-grabbing"
+                  title="Ver dados do lead"
                 >
                   <p className="text-sm font-semibold text-[var(--foreground)]">
                     {lead.name || "Sem nome"}

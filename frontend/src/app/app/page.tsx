@@ -12,7 +12,8 @@ import { InicioModule } from "./modules/InicioModule";
 import { KanbanModule } from "./modules/KanbanModule";
 import { NotesModule } from "./modules/NotesModule";
 import { TasksModule } from "./modules/TasksModule";
-import { KANBAN_COLUMNS, type IconName } from "./shared";
+import { LeadDetailDrawer } from "./modules/LeadDetailDrawer";
+import { KANBAN_COLUMNS, type DocumentType, type IconName, type LeadDetails } from "./shared";
 
 type Session = {
   phone: string;
@@ -46,9 +47,21 @@ type Lead = {
   name: string | null;
   phone: string;
   status: string;
+  created_at?: string | null;
   updated_at: string;
   last_inbound_at?: string | null;
   last_conversation_summary?: string | null;
+  email?: string | null;
+  document?: string | null;
+  document_type?: DocumentType | null;
+  birthday?: string | null;
+  zip_code?: string | null;
+  street?: string | null;
+  address_number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
   conversation_window?: {
     is_open: boolean;
     opened_at: string | null;
@@ -224,6 +237,9 @@ export default function AppPage() {
   const [leadName, setLeadName] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
   const [creatingLead, setCreatingLead] = useState(false);
+  const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
+  const [savingLeadDetails, setSavingLeadDetails] = useState(false);
+  const [leadDetailsError, setLeadDetailsError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
@@ -254,6 +270,9 @@ export default function AppPage() {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteDirtyRef = useRef(false);
   const savingNoteRef = useRef(false);
+  // Promise do save em voo — permite que callers (ex.: flushPendingSave)
+  // aguardem um auto-save em andamento terminar antes de continuar.
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
@@ -566,6 +585,45 @@ export default function AppPage() {
     setLeads((data.leads || []) as Lead[]);
   }
 
+  function openLeadDetails(leadId: string) {
+    setLeadDetailsError(null);
+    setDetailLeadId(leadId);
+  }
+
+  async function updateLeadDetails(leadId: string, details: LeadDetails): Promise<boolean> {
+    if (!canManageOperations) {
+      setLeadDetailsError("Seu perfil nao possui permissao para editar leads.");
+      return false;
+    }
+    if (!companyId) {
+      setLeadDetailsError("Empresa nao identificada para editar lead.");
+      return false;
+    }
+
+    setSavingLeadDetails(true);
+    setLeadDetailsError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v2/leads/${leadId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...details, company_id: companyId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Falha ao atualizar lead.");
+      }
+
+      // Atualiza o lead em memoria com o registro retornado pelo backend.
+      setLeads((prev) => prev.map((lead) => (lead.id === leadId ? { ...lead, ...(data.lead as Lead) } : lead)));
+      return true;
+    } catch (error) {
+      setLeadDetailsError(error instanceof Error ? error.message : "Falha ao atualizar lead.");
+      return false;
+    } finally {
+      setSavingLeadDetails(false);
+    }
+  }
+
   async function createLeadManually() {
     if (!canManageOperations) {
       setLeadsError("Seu perfil nao possui permissao para criar leads.");
@@ -822,6 +880,13 @@ export default function AppPage() {
       clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
     }
+    // Se ha um auto-save em voo, aguarda ele terminar antes de tentar de novo —
+    // sem isso, saveCurrentNote retornaria imediatamente pelo guard savingNoteRef
+    // e o texto digitado durante a requisicao seria perdido ao trocar de pagina.
+    if (saveInFlightRef.current) {
+      await saveInFlightRef.current;
+    }
+    // Salva o conteudo mais recente (pode ter sido digitado durante o save em voo).
     if (noteDirtyRef.current) {
       await saveCurrentNote({ silent: true });
     }
@@ -864,7 +929,10 @@ export default function AppPage() {
     setNoteSaveStatus("idle");
     setTimeout(() => editorRef.current?.focus(), 0);
     // Cria a pagina no servidor imediatamente (resolve o estado "vazio" fantasma).
-    void saveCurrentNote({ silent: true });
+    // forceCreate + title/id explicitos: os setState acima ainda nao refletiram na
+    // closure, entao sem isso o save faria um PUT na nota ANTERIOR (sobrescrevendo-a)
+    // em vez de POST de uma nota nova — por isso so aparecia 1 pagina na lista.
+    void saveCurrentNote({ silent: true, forceCreate: true, title: "Nova nota" });
   }
 
   function syncEditorContent() {
@@ -895,7 +963,9 @@ export default function AppPage() {
     syncEditorContent();
   }
 
-  async function saveCurrentNote(options: { silent?: boolean } = {}) {
+  async function saveCurrentNote(
+    options: { silent?: boolean; noteId?: string | null; forceCreate?: boolean; title?: string } = {},
+  ): Promise<void> {
     const silent = options.silent === true;
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -908,6 +978,7 @@ export default function AppPage() {
     }
     if (!companyId) return;
     // Evita requisicoes concorrentes (ex.: auto-save disparando 2x cria nota duplicada).
+    // Quem precisar do resultado deve aguardar saveInFlightRef.current.
     if (savingNoteRef.current) return;
     const notebookId = selectedNotebookId || noteNotebooks[0]?.id;
     if (!notebookId) {
@@ -915,24 +986,36 @@ export default function AppPage() {
       return;
     }
 
-    const title = noteEditorTitle.trim();
+    // Aceita titulo explicito pelo mesmo motivo do id: quem chama logo apos um
+    // setNoteEditorTitle(...) ainda enxerga o valor antigo na closure.
+    const title = (options.title !== undefined ? options.title : noteEditorTitle).trim();
     if (!title) {
       if (!silent) setNotesError("Informe um titulo para a nota.");
       return;
     }
 
+    // O id alvo pode ser passado explicitamente (ex.: startNewNote forca criacao
+    // ao chamar setSelectedNoteId(null), cujo state ainda nao foi aplicado ao
+    // fechar esta closure — usar selectedNoteId aqui faria um PUT na nota ANTERIOR).
+    const targetNoteId = options.forceCreate
+      ? null
+      : options.noteId !== undefined
+        ? options.noteId
+        : selectedNoteId;
+
     const html = sanitizeNoteHtml(editorRef.current?.innerHTML || noteEditorHtml);
     const text = htmlToPlainText(html);
-    const isUpdate = Boolean(selectedNoteId);
+    const isUpdate = Boolean(targetNoteId);
     const endpoint = isUpdate
-      ? `${API_BASE}/api/v2/notes/${selectedNoteId}`
+      ? `${API_BASE}/api/v2/notes/${targetNoteId}`
       : `${API_BASE}/api/v2/notes`;
 
     savingNoteRef.current = true;
     setSavingNote(true);
     setNoteSaveStatus("saving");
     if (!silent) setNotesError(null);
-    try {
+
+    const request = (async () => {
       const response = await fetch(endpoint, {
         method: isUpdate ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -979,12 +1062,22 @@ export default function AppPage() {
           ? previous.map((note) => (note.id === savedNote.id ? savedNote : note))
           : [savedNote, ...previous];
       });
+    })();
+
+    saveInFlightRef.current = request.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    try {
+      await request;
     } catch (error) {
       setNoteSaveStatus("error");
       setNotesError(error instanceof Error ? error.message : "Falha ao salvar nota.");
     } finally {
       savingNoteRef.current = false;
       setSavingNote(false);
+      saveInFlightRef.current = null;
     }
   }
 
@@ -1140,6 +1233,8 @@ export default function AppPage() {
     if (!leadId) return null;
     return leads.find((lead) => lead.id === leadId) || null;
   }
+
+  const detailLead = getLeadById(detailLeadId);
 
   async function saveCompanySettings() {
     if (!companyId || !profileId) return;
@@ -1790,6 +1885,18 @@ export default function AppPage() {
   const selectedLeadWindowOpen = latestInboundMessage
     ? Date.now() - new Date(latestInboundMessage.created_at).getTime() < 24 * 60 * 60 * 1000
     : false;
+  // Quando a janela esta fechada mas ja existe um outbound apos a ultima inbound,
+  // significa que um template foi enviado e estamos aguardando o cliente responder
+  // para reabrir a janela de 24h.
+  const latestOutboundMessage = chatMessages
+    .filter((message) => message.direction === "outbound")
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+  const selectedLeadTemplateSent =
+    !selectedLeadWindowOpen &&
+    !!latestOutboundMessage &&
+    (!latestInboundMessage ||
+      new Date(latestOutboundMessage.created_at).getTime() >
+        new Date(latestInboundMessage.created_at).getTime());
 
   if (!sessionChecked || bootstrapping) return <AppBootstrapSkeleton />;
   if (!session) return null;
@@ -1844,6 +1951,7 @@ export default function AppPage() {
               setLeadPhone={setLeadPhone}
               createLeadManually={createLeadManually}
               creatingLead={creatingLead}
+              openLeadDetails={openLeadDetails}
             />
           ) : selectedModule === "agenda" ? (
             <AgendaModule
@@ -1962,7 +2070,9 @@ export default function AppPage() {
               filteredChatLeads={filteredChatLeads}
               setSelectedChatLeadId={setSelectedChatLeadId}
               selectedChatLead={selectedChatLead}
+              openLeadDetails={openLeadDetails}
               selectedLeadWindowOpen={selectedLeadWindowOpen}
+              selectedLeadTemplateSent={selectedLeadTemplateSent}
               loadingChatMessages={loadingChatMessages}
               chatMessages={chatMessages}
               chatMessagesError={chatMessagesError}
@@ -2028,6 +2138,17 @@ export default function AppPage() {
           )}
         </section>
       </div>
+
+      <LeadDetailDrawer
+        key={detailLead?.id ?? "none"}
+        lead={detailLead}
+        open={Boolean(detailLead)}
+        onClose={() => setDetailLeadId(null)}
+        onSave={updateLeadDetails}
+        saving={savingLeadDetails}
+        canEdit={canManageOperations}
+        error={leadDetailsError}
+      />
     </main>
   );
 }

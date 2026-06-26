@@ -1,5 +1,23 @@
 export type IconName = "home" | "kanban" | "calendar" | "tasks" | "notes" | "chat" | "user" | "settings";
 
+export type DocumentType = "cpf" | "cnpj";
+
+// Campos cadastrais do lead que sao editaveis no painel de detalhes.
+export type LeadDetails = {
+  name: string | null;
+  email: string | null;
+  document: string | null;
+  document_type: DocumentType | null;
+  birthday: string | null;
+  zip_code: string | null;
+  street: string | null;
+  address_number: string | null;
+  complement: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+};
+
 export type KanbanColumn = {
   id: string;
   label: string;

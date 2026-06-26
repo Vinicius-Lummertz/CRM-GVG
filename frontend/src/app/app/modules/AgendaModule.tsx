@@ -220,30 +220,30 @@ export function AgendaModule({
               <h3 className="text-xl font-semibold text-[var(--foreground)]">
                 Eventos do dia {selectedDay}/{calendarMonth.getMonth() + 1}
               </h3>
-              <button onClick={() => { setShowDayModal(false); resetEventForm(); }} className="text-sm text-[var(--muted)]">Fechar</button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setEditingEventId("new");
+                    const baseDay = selectedDay || 1;
+                    const start = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), baseDay, 9, 0, 0);
+                    const end = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), baseDay, 10, 0, 0);
+                    setEventTitle("");
+                    setEventStart(start.toISOString().slice(0, 16));
+                    setEventEnd(end.toISOString().slice(0, 16));
+                    setEventLeadId("");
+                  }}
+                  className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs text-[var(--foreground)]"
+                >
+                  Adicionar
+                </button>
+                <button onClick={() => { setShowDayModal(false); resetEventForm(); }} className="text-sm text-[var(--muted)]">Fechar</button>
+              </div>
             </div>
 
             <div className="max-h-[280px] space-y-2 overflow-auto pr-1">
               {selectedDayEvents.length === 0 ? (
                 <div className="rounded-xl bg-pink-50 px-3 py-4 text-sm text-[var(--muted)]">
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Sem eventos neste dia.</span>
-                    <button
-                      onClick={() => {
-                        setEditingEventId("new");
-                        const baseDay = selectedDay || 1;
-                        const start = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), baseDay, 9, 0, 0);
-                        const end = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), baseDay, 10, 0, 0);
-                        setEventTitle("");
-                        setEventStart(start.toISOString().slice(0, 16));
-                        setEventEnd(end.toISOString().slice(0, 16));
-                        setEventLeadId("");
-                      }}
-                      className="h-8 rounded-lg border border-[var(--line)] bg-white px-3 text-xs text-[var(--foreground)]"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
+                  Sem eventos neste dia.
                 </div>
               ) : (
                 selectedDayEvents.map((event) => (
@@ -260,36 +260,41 @@ export function AgendaModule({
                 ))
               )}
             </div>
+          </div>
+        </div>
+      ) : null}
 
-            {editingEventId ? (
-              <div className="mt-4 rounded-xl border border-[var(--line)] bg-white p-4">
-                <p className="mb-2 text-sm font-semibold text-[var(--foreground)]">
-                  {editingEventId === "new" ? "Novo evento" : "Editar evento"}
-                </p>
-                <div className="space-y-2">
-                  <input value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Titulo" className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm" />
-                  <input type="datetime-local" value={eventStart} onChange={(e) => setEventStart(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm" />
-                  <input type="datetime-local" value={eventEnd} onChange={(e) => setEventEnd(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm" />
-                  <select value={eventLeadId} onChange={(e) => setEventLeadId(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm">
-                    <option value="">Sem lead vinculado</option>
-                    {leads.map((lead) => (
-                      <option key={lead.id} value={lead.id}>
-                        {(lead.name || "Sem nome") + " - " + lead.phone}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mt-3 flex justify-end gap-2">
-                  <button onClick={resetEventForm} className="h-9 rounded-lg border border-[var(--line)] px-3 text-xs">Cancelar</button>
-                  <button
-                    onClick={editingEventId === "new" ? createEvent : saveEditedEvent}
-                    className="h-9 rounded-lg bg-[var(--primary)] px-3 text-xs font-semibold text-white"
-                  >
-                    Salvar
-                  </button>
-                </div>
-              </div>
-            ) : null}
+      {editingEventId ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-[var(--foreground)]">
+                {editingEventId === "new" ? "Novo evento" : "Editar evento"}
+              </h3>
+              <button onClick={resetEventForm} className="text-sm text-[var(--muted)]">Fechar</button>
+            </div>
+            <div className="space-y-2">
+              <input value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Titulo" className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm" />
+              <input type="datetime-local" value={eventStart} onChange={(e) => setEventStart(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm" />
+              <input type="datetime-local" value={eventEnd} onChange={(e) => setEventEnd(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm" />
+              <select value={eventLeadId} onChange={(e) => setEventLeadId(e.target.value)} className="h-10 w-full rounded-lg border border-[var(--line)] px-3 text-sm">
+                <option value="">Sem lead vinculado</option>
+                {leads.map((lead) => (
+                  <option key={lead.id} value={lead.id}>
+                    {(lead.name || "Sem nome") + " - " + lead.phone}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <button onClick={resetEventForm} className="h-9 rounded-lg border border-[var(--line)] px-3 text-xs">Cancelar</button>
+              <button
+                onClick={editingEventId === "new" ? createEvent : saveEditedEvent}
+                className="h-9 rounded-lg bg-[var(--primary)] px-3 text-xs font-semibold text-white"
+              >
+                Salvar
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
